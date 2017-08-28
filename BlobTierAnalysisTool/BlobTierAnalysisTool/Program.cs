@@ -12,11 +12,12 @@ namespace BlobTierAnalysisTool
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("************************************************************************************");
-            Console.WriteLine("*** Welcome to Blob Tier Ananlysis Too. This tool will analyze one or more blob  ***");
-            Console.WriteLine("*** containers in your storage account for potential storage cost savings if you ***");
-            Console.WriteLine("*** move block blobs from \"Hot\" or \"Cool\" tier to \"Archive\" tier.                ***");
-            Console.WriteLine("************************************************************************************");
+            Console.WriteLine("*********************************************************************************");
+            Console.WriteLine("Welcome to the Blob Tier Ananlysis Tool. This tool will analyze one or more");
+            Console.WriteLine("blob containers in your storage account for potential storage cost savings if you");
+            Console.WriteLine("move block blobs from the \"Hot\" or \"Cool\" tier to the \"Archive\" tier. It");
+            Console.WriteLine("will also enable you to move analyzed blobs to the \"Archive\" tier.");
+            Console.WriteLine("*********************************************************************************");
             Console.WriteLine();
             var containerToSearch = GetContainerInput();
             var numDaysSinceLastModifiedFilterCriteria = GetBlobLastModifiedDateFilterCriteriaInput();
@@ -84,9 +85,10 @@ namespace BlobTierAnalysisTool
             }
             if (totalArchivableBlobs > 0)
             {
-                Console.WriteLine($"You could potentially save {totalCostSavings.ToString("c")} in monthly storage costs by moving {totalArchivableBlobs} to archive tier. Please press \"Y\" to continue.");
+                Console.WriteLine($"You could potentially save {totalCostSavings.ToString("c")} in monthly storage costs by moving {totalArchivableBlobs} blobs to the Archive tier. Please press \"Y\" to continue.");
                 var input = Console.ReadKey();
                 if (input.Key.ToString().ToUpperInvariant() == "Y")
+                    Console.WriteLine();
                 {
                     foreach (var item in containersStats)
                     {
