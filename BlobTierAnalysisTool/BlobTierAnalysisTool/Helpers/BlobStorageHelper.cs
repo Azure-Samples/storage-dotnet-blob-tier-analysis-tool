@@ -15,6 +15,44 @@ namespace BlobTierAnalysisTool.Helpers
     {
         private static CloudStorageAccount _storageAccount;
 
+        /// <summary>
+        /// Tries to parse a connection string and sets the storage account.
+        /// </summary>
+        /// <param name="connectionString">Storage account connection string.</param>
+        /// <returns>True or false</returns>
+        public static bool ParseConnectionString(string connectionString)
+        {
+            try
+            {
+                return CloudStorageAccount.TryParse(connectionString, out _storageAccount);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Checks if the container specified by the user exists or not.
+        /// </summary>
+        /// <param name="containerName">Name of the container.</param>
+        /// <returns>True if container exists else false.</returns>
+        public static async Task<bool> DoesContainerExists(string containerName)
+        {
+            try
+            {
+                return await StorageAccount.CreateCloudBlobClient().GetContainerReference(containerName).ExistsAsync();
+            }
+            catch (Exception exception)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// List blob containers in a storage account.
+        /// </summary>
+        /// <returns>List of blob containers.</returns>
         public static async Task<IEnumerable<string>> ListContainers()
         {
             List<string> containers = new List<string>();
@@ -31,14 +69,25 @@ namespace BlobTierAnalysisTool.Helpers
             return containers;
         }
 
-        public static async Task<Models.ContainerStatistics> AnalyzeContainerForArchival(string containerName, Models.FilterCriteria filterCriteria)
+        /// <summary>
+        /// Analyzes blobs in a container. This method will list all blobs in a blob container and 
+        /// matches them against the filter criteria.
+        /// </summary>
+        /// <param name="containerName">Name of the blob container.</param>
+        /// <param name="filterCriteria"><see cref="Models.FilterCriteria"/></param>
+        /// <returns>
+        /// <see cref="Models.ContainerStatistics"/> which contains information about block blobs
+        /// in different tiers and puts them in 2 buckets - all block blobs & block blobs that match
+        /// the filter criteria.
+        /// </returns>
+        public static async Task<Models.ContainerStatistics> AnalyzeContainer(string containerName, Models.FilterCriteria filterCriteria)
         {
             var blobContainer = StorageAccount.CreateCloudBlobClient().GetContainerReference(containerName);
             var containerStats = new Models.ContainerStatistics(containerName);
             BlobContinuationToken token = null;
             do
             {
-                var result = await blobContainer.ListBlobsSegmentedAsync(null, true, BlobListingDetails.None, 100, token, null, null);
+                var result = await blobContainer.ListBlobsSegmentedAsync(null, true, BlobListingDetails.None, 1000, token, null, null);
                 token = result.ContinuationToken;
                 var blobs = result.Results;
                 foreach (var blob in blobs)
@@ -48,7 +97,7 @@ namespace BlobTierAnalysisTool.Helpers
                     {
                         long blobSize = cloudBlockBlob.Properties.Length;
                         DateTime blobLastModifiedDate = cloudBlockBlob.Properties.LastModified.Value.DateTime;
-                        var canBlobBeArchived = CanBlobBeArchived(cloudBlockBlob, filterCriteria);
+                        var doesBlobMatchFilterCriteria = DoesBlobMatchFilterCriteria(cloudBlockBlob, filterCriteria);
                         var blobTier = cloudBlockBlob.Properties.StandardBlobTier;
                         switch (blobTier)
                         {
@@ -57,30 +106,37 @@ namespace BlobTierAnalysisTool.Helpers
                                 var hotAccessTierStats = containerStats.BlobsStatistics[StandardBlobTier.Hot];
                                 hotAccessTierStats.Count += 1;
                                 hotAccessTierStats.Size += blobSize;
-                                if (canBlobBeArchived)
+                                if (doesBlobMatchFilterCriteria)
                                 {
-                                    var hotArchivableAccessTierStats = containerStats.ArchivableBlobsStatistics[StandardBlobTier.Hot];
-                                    hotArchivableAccessTierStats.Count += 1;
-                                    hotArchivableAccessTierStats.Size += blobSize;
-                                    hotArchivableAccessTierStats.BlobNames.Add(cloudBlockBlob.Name);
+                                    var matchingHotAccessTierStats = containerStats.MatchingBlobsStatistics[StandardBlobTier.Hot];
+                                    matchingHotAccessTierStats.Count += 1;
+                                    matchingHotAccessTierStats.Size += blobSize;
+                                    matchingHotAccessTierStats.BlobNames.Add(cloudBlockBlob.Name);
                                 }
                                 break;
                             case StandardBlobTier.Cool:
                                 var coolAccessTierStats = containerStats.BlobsStatistics[StandardBlobTier.Cool];
                                 coolAccessTierStats.Count += 1;
                                 coolAccessTierStats.Size += blobSize;
-                                if (canBlobBeArchived)
+                                if (doesBlobMatchFilterCriteria)
                                 {
-                                    var coolArchivableAccessTierStats = containerStats.ArchivableBlobsStatistics[StandardBlobTier.Cool];
-                                    coolArchivableAccessTierStats.Count += 1;
-                                    coolArchivableAccessTierStats.Size += blobSize;
-                                    coolArchivableAccessTierStats.BlobNames.Add(cloudBlockBlob.Name);
+                                    var matchingCoolAccessTierStats = containerStats.MatchingBlobsStatistics[StandardBlobTier.Cool];
+                                    matchingCoolAccessTierStats.Count += 1;
+                                    matchingCoolAccessTierStats.Size += blobSize;
+                                    matchingCoolAccessTierStats.BlobNames.Add(cloudBlockBlob.Name);
                                 }
                                 break;
                             case StandardBlobTier.Archive:
                                 var archiveAccessTierStats = containerStats.BlobsStatistics[StandardBlobTier.Archive];
                                 archiveAccessTierStats.Count += 1;
                                 archiveAccessTierStats.Size += blobSize;
+                                if (doesBlobMatchFilterCriteria)
+                                {
+                                    var matchingArchiveAccessTierStats = containerStats.MatchingBlobsStatistics[StandardBlobTier.Archive];
+                                    matchingArchiveAccessTierStats.Count += 1;
+                                    matchingArchiveAccessTierStats.Size += blobSize;
+                                    matchingArchiveAccessTierStats.BlobNames.Add(cloudBlockBlob.Name);
+                                }
                                 break;
                         }
                     }
@@ -90,6 +146,13 @@ namespace BlobTierAnalysisTool.Helpers
             return containerStats;
         }
 
+        /// <summary>
+        /// Changes the access tier of a block blob in a blob container.
+        /// </summary>
+        /// <param name="containerName">Name of the blob container.</param>
+        /// <param name="blobName">Name of the blob.</param>
+        /// <param name="targetTier"><see cref="StandardBlobTier"/> which indicates the new access tier for the blob.</param>
+        /// <returns>True or false.</returns>
         public static async Task<bool> ChangeAccessTier(string containerName, string blobName, StandardBlobTier targetTier)
         {
             try
@@ -104,14 +167,14 @@ namespace BlobTierAnalysisTool.Helpers
             }
         }
 
+        /// <summary>
+        /// Gets the <see cref="CloudStorageAccount"/>.
+        /// </summary>
         public static CloudStorageAccount StorageAccount
         {
             get
             {
-                if (_storageAccount != null) return _storageAccount;
-                var appSettingsReader = new AppSettingsReader();
-                var connectionString = (String)appSettingsReader.GetValue("StorageConnectionString", typeof(String));
-                _storageAccount = CloudStorageAccount.Parse(connectionString);
+                if (_storageAccount == null) throw new ArgumentNullException("StorageAccount", "Storage account parameter cannot be null");
                 return _storageAccount;
             }
         }
@@ -122,7 +185,7 @@ namespace BlobTierAnalysisTool.Helpers
         /// <param name="blob"></param>
         /// <param name="filterCriteria"></param>
         /// <returns></returns>
-        private static bool CanBlobBeArchived(CloudBlockBlob blob, Models.FilterCriteria filterCriteria)
+        private static bool DoesBlobMatchFilterCriteria(CloudBlockBlob blob, Models.FilterCriteria filterCriteria)
         {
             if (blob.Properties.StandardBlobTier == StandardBlobTier.Archive) return false;
             var dateTimeFrom = filterCriteria.LastModifiedDateFrom ?? DateTime.MinValue;

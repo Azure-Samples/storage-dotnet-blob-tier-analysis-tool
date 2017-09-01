@@ -1,4 +1,6 @@
-﻿namespace BlobTierAnalysisTool.Helpers
+﻿using System.Text.RegularExpressions;
+
+namespace BlobTierAnalysisTool.Helpers
 {
     public static class Utils
     {
@@ -34,5 +36,10 @@
             return $"{sizeString} {units}";
         }
 
+        public static bool IsValidContainerName(string containerName)
+        {
+            var containerNameRegex = new Regex("^([a-z0-9]+(-[a-z0-9]+)*)$");
+            return containerNameRegex.IsMatch(containerName) || containerName == "*" || containerName == "$root" || containerName == "$logs";
+        }
     }
 }

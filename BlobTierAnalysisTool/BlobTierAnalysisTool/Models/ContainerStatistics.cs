@@ -9,7 +9,7 @@ namespace BlobTierAnalysisTool.Models
 {
     public class ContainerStatistics
     {
-        private readonly Dictionary<StandardBlobTier, BlobsStatistics> _blobsStatistics, _archivableBlobsStatistics;
+        private readonly Dictionary<StandardBlobTier, BlobsStatistics> _blobsStatistics, _matchingBlobsStatistics;
 
         private readonly string _name;
 
@@ -22,15 +22,15 @@ namespace BlobTierAnalysisTool.Models
             _name = blobContainerName;
             _blobsStatistics = new Dictionary<StandardBlobTier, BlobsStatistics>()
             {
-                {StandardBlobTier.Hot, new BlobsStatistics(0.0184)},
-                {StandardBlobTier.Cool, new BlobsStatistics(0.01)},
-                {StandardBlobTier.Archive, new BlobsStatistics(0.0018)}
+                {StandardBlobTier.Hot, new BlobsStatistics()},
+                {StandardBlobTier.Cool, new BlobsStatistics()},
+                {StandardBlobTier.Archive, new BlobsStatistics()}
             };
-            _archivableBlobsStatistics = new Dictionary<StandardBlobTier, BlobsStatistics>()
+            _matchingBlobsStatistics = new Dictionary<StandardBlobTier, BlobsStatistics>()
             {
-                {StandardBlobTier.Hot, new BlobsStatistics(0.0184)},
-                {StandardBlobTier.Cool, new BlobsStatistics(0.01)},
-                {StandardBlobTier.Archive, new BlobsStatistics(0.0018)}
+                {StandardBlobTier.Hot, new BlobsStatistics()},
+                {StandardBlobTier.Cool, new BlobsStatistics()},
+                {StandardBlobTier.Archive, new BlobsStatistics()}
             };
         }
 
@@ -59,11 +59,11 @@ namespace BlobTierAnalysisTool.Models
         /// <summary>
         /// Gets the blob statistics for the container.
         /// </summary>
-        public Dictionary<StandardBlobTier, BlobsStatistics> ArchivableBlobsStatistics
+        public Dictionary<StandardBlobTier, BlobsStatistics> MatchingBlobsStatistics
         {
             get
             {
-                return _archivableBlobsStatistics;
+                return _matchingBlobsStatistics;
             }
         }
 

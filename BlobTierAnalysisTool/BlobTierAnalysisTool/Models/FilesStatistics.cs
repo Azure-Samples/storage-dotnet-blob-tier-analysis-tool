@@ -1,18 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
 
 namespace BlobTierAnalysisTool.Models
 {
-    public class BlobsStatistics
+    public class FilesStatistics
     {
-        private readonly List<string> _blobNames;
+        private readonly List<string> _fileNames;
 
-        public BlobsStatistics()
+        public FilesStatistics()
         {
-            _blobNames = new List<string>();
+            _fileNames = new List<string>();
         }
 
         /// <summary>
@@ -28,9 +24,9 @@ namespace BlobTierAnalysisTool.Models
         /// <summary>
         /// Gets a list of blob names.
         /// </summary>
-        public List<string> BlobNames
+        public List<string> FileNames
         {
-            get { return _blobNames; }
+            get { return _fileNames; }
         }
     }
 }

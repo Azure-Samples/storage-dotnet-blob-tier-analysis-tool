@@ -66,10 +66,14 @@
   <ItemGroup>
     <Compile Include="Helpers\BlobStorageHelper.cs" />
     <Compile Include="Helpers\Constants.cs" />
+    <Compile Include="Helpers\FileSystemHelper.cs" />
     <Compile Include="Helpers\Utils.cs" />
     <Compile Include="Models\BlobsStatistics.cs" />
     <Compile Include="Models\ContainerStatistics.cs" />
+    <Compile Include="Models\FilesStatistics.cs" />
     <Compile Include="Models\FilterCriteria.cs" />
+    <Compile Include="Models\FolderStatistics.cs" />
+    <Compile Include="Models\StorageCosts.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
