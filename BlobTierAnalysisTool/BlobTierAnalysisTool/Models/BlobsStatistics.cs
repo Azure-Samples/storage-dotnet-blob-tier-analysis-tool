@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.WindowsAzure.Storage.Blob;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,11 +9,11 @@ namespace BlobTierAnalysisTool.Models
 {
     public class BlobsStatistics
     {
-        private readonly List<string> _blobNames;
+        private readonly List<CloudBlockBlob> _blobs;
 
         public BlobsStatistics()
         {
-            _blobNames = new List<string>();
+            _blobs = new List<CloudBlockBlob>();
         }
 
         /// <summary>
@@ -28,9 +29,9 @@ namespace BlobTierAnalysisTool.Models
         /// <summary>
         /// Gets a list of blob names.
         /// </summary>
-        public List<string> BlobNames
+        public List<CloudBlockBlob> Blobs
         {
-            get { return _blobNames; }
+            get { return _blobs; }
         }
     }
 }
