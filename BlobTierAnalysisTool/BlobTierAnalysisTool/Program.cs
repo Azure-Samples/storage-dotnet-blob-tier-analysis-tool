@@ -27,17 +27,18 @@ namespace BlobTierAnalysisTool
             //    System.Threading.Thread.Sleep(1000);
             //}
             Console.WriteLine("*********************************************************************************");
-            Console.WriteLine("Welcome to the Blob Tier Ananlysis Tool. This tool can do two things for you:");
-            Console.WriteLine("1. It can analyze the contents of a local folder/file share and give you an");
-            Console.WriteLine("   estimate of storage costs by various access tiers (Hot, Cool, Archive) should");
-            Console.WriteLine("   you decide to store the files in Azure Storage");
-            Console.WriteLine("2. It can analyze one or more blob containers in your storage account and will");
-            Console.WriteLine("   give you an estimate of storage costs under different access tiers. If you like,");
-            Console.WriteLine("   this tool will also move blobs across different access tiers for you.");
+            Console.WriteLine("Welcome to the Blob Tier Ananlysis Tool. This tool can:");
+            Console.WriteLine("1. Analyze the contents of a local folder/file share and give you an");
+            Console.WriteLine("   estimate of storage costs for different access tiers (Hot, Cool, Archive)");
+            Console.WriteLine("   should you decide to store the files in Azure Storage.");
+            Console.WriteLine("2. Analyze one or more blob containers in your existing Azure storage account");
+            Console.WriteLine("   and give you an estimate of storage costs for different access tiers. ");
+            Console.WriteLine("   This tool can also move blobs across different access tiers for you,");
+            Console.WriteLine("   should you choose.");
             Console.WriteLine();
-            Console.WriteLine("For number 2, Please note that currently this tool will only work with:");
-            Console.WriteLine("1) A \"Blob Storage\" account with \"LRS\" redundancy in \"US East 2\" region.");
-            Console.WriteLine("2) Storage account's Azure Subscription must be enabled for arhiving.");
+            Console.WriteLine("For number 2, please note that currently this tool will only work when using");
+            Console.WriteLine("a \"Blob Storage\" account with LRS redundancy in the \"US East 2\" region");
+            Console.WriteLine("where the parent subscription is enabled for the archive feature.");
             Console.WriteLine();
             Console.WriteLine("Please read https://azure.microsoft.com/en-us/blog/announcing-the-public-preview-of-azure-archive-blob-storage-and-blob-level-tiering/ for more details");
             Console.WriteLine("*********************************************************************************");
@@ -263,7 +264,7 @@ namespace BlobTierAnalysisTool
                 Console.WriteLine(new string('*', 30));
                 Console.WriteLine("Please enter the source type you want to analyze.");
                 Console.WriteLine("Valid values are [L]ocal or [C]loud.");
-                Console.WriteLine("Please note that you can also specify source type as command line argument as well.");
+                Console.WriteLine("Please note that you can also specify source type as command line argument.");
                 Console.WriteLine("Simply specify /SourceType:<L|C> in command line.");
                 Console.WriteLine(new string('*', 30));
                 sourceType = Console.ReadLine().ToUpperInvariant();
@@ -302,7 +303,7 @@ namespace BlobTierAnalysisTool
                 Console.WriteLine();
                 Console.WriteLine(new string('*', 30));
                 Console.WriteLine("Enter the full path of a directory that you want to analyze.");
-                Console.WriteLine("Please note that you can also specify folder path as command line argument as well.");
+                Console.WriteLine("Please note that you can also specify folder path as command line argument.");
                 Console.WriteLine("Simply specify /Source:<fullpath> in command line.");
                 Console.WriteLine(new string('*', 30));
                 Console.WriteLine();
@@ -343,7 +344,7 @@ namespace BlobTierAnalysisTool
                 Console.WriteLine("Please enter connection string for your storage account.");
                 Console.WriteLine("Connection string should be in the following format:");
                 Console.WriteLine("DefaultEndpointsProtocol=https;AccountName=<youraccountname>;AccountKey=<youraccountkey>");
-                Console.WriteLine("Please note that you can also specify connection string as command line argument as well.");
+                Console.WriteLine("Please note that you can also specify connection string as command line argument.");
                 Console.WriteLine("Simply specify /ConnectionString:<yourconnectionstring> in command line.");
                 Console.WriteLine(new string('*', 30));
                 connectionString = Console.ReadLine();
@@ -386,7 +387,7 @@ namespace BlobTierAnalysisTool
                 Console.WriteLine();
                 Console.WriteLine(new string('*', 30));
                 Console.WriteLine("Enter the blob container name that you want to analyze. To analyze all blob containers, please enter *");
-                Console.WriteLine("Please note that you can also specify container name as command line argument as well.");
+                Console.WriteLine("Please note that you can also specify container name as command line argument.");
                 Console.WriteLine("Simply specify /Source:<blobcontainername> in command line.");
                 Console.WriteLine(new string('*', 30));
                 Console.WriteLine();
@@ -423,13 +424,18 @@ namespace BlobTierAnalysisTool
             }
             Console.WriteLine();
             Console.WriteLine(new string('*', 30));
-            Console.WriteLine("Enter the number of days before which a blob/file was last modified to be considered for analysis. Press \"Enter\" key for default value (30 days).");
-            Console.WriteLine("Please note that you can also specify this value as command line argument as well.");
+            Console.WriteLine("Enter the minimum number of days during which a blob/file could have been last modified to be considered for analysis. " +
+                "The value \"1\" will analyze all blobs, including those last modified in the previous 1 day. Press \"Enter\" key for default value (30 days).");
+            Console.WriteLine("Please note that you can also specify this value as command line argument.");
             Console.WriteLine("Simply specify /Days:<numberofdays> in command line.");
             Console.WriteLine(new string('*', 30));
             Console.WriteLine();
             var consoleInput = Console.ReadLine().Trim().ToLowerInvariant();
             ExitApplicationIfRequired(consoleInput);
+            if (consoleInput == "")
+            {
+                return 30;
+            }
             if (!Int32.TryParse(consoleInput, out numDays) || numDays <= 0)
             {
                 Console.WriteLine("Invalid input. Please try again.");
@@ -458,7 +464,7 @@ namespace BlobTierAnalysisTool
             Console.WriteLine();
             Console.WriteLine(new string('*', 30));
             Console.WriteLine("Enter the minimum size of the blob/file in bytes to be considered for analysis. Press \"Enter\" key for default value (0 bytes).");
-            Console.WriteLine("Please note that you can also specify this value as command line argument as well.");
+            Console.WriteLine("Please note that you can also specify this value as command line argument.");
             Console.WriteLine("Simply specify /Size:<minimumsizeinbytes> in command line.");
             Console.WriteLine(new string('*', 30));
             Console.WriteLine();
@@ -673,7 +679,7 @@ namespace BlobTierAnalysisTool
             Console.WriteLine();
             Console.WriteLine($"To change the access tier of the blobs to \"{targetTier.ToString()}\", please enter \"Y\" now.");
             Console.WriteLine("Please be aware of the the one-time costs you will incur for changing the access tiers.");
-            Console.WriteLine("Press any other key to continue with the cost analysis.");
+            Console.WriteLine("Enter any other key to continue with the cost analysis.");
             var consoleInput = Console.ReadLine();
             switch (consoleInput)
             {
