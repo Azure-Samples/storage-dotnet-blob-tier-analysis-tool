@@ -424,8 +424,7 @@ namespace BlobTierAnalysisTool
             }
             Console.WriteLine();
             Console.WriteLine(new string('*', 30));
-            Console.WriteLine("Enter the minimum number of days during which a blob/file could have been last modified to be considered for analysis. " +
-                "The value \"1\" will analyze all blobs, including those last modified in the previous 1 day. Press \"Enter\" key for default value (30 days).");
+            Console.WriteLine("Enter the last modified time (in days) to exclude blobs/files modified after that point in time. If your blobs have never been modified, last modified time is equivalent to creation time. For example, specifying the value 30 will exclude all blobs created or modified in the last 30 days from analysis.");
             Console.WriteLine("Please note that you can also specify this value as command line argument.");
             Console.WriteLine("Simply specify /Days:<numberofdays> in command line.");
             Console.WriteLine(new string('*', 30));
