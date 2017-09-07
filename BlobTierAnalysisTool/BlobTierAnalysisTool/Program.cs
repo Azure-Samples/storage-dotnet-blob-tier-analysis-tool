@@ -15,6 +15,7 @@ namespace BlobTierAnalysisTool
         private const string SourceArgumentName = "/Source:";
         private const string DaysArgumentName = "/Days:";
         private const string SizeArgumentName = "/Size:";
+        private const string TargetTierArgumentName = "/TargetTier:";
         private static Dictionary<StandardBlobTier, Models.StorageCosts> storageCosts = null;
         private static IEnumerable<string> sourcesToScan = null;
         private static Models.FilterCriteria filterCriteria = null;
@@ -40,9 +41,9 @@ namespace BlobTierAnalysisTool
             GetHelpCommandLineArgument();
             storageCosts = new Dictionary<StandardBlobTier, Models.StorageCosts>()
             {
-                { StandardBlobTier.Hot, new Models.StorageCosts(0.0184, 0.05, 0.004, 0, 0) },
-                { StandardBlobTier.Cool, new Models.StorageCosts(0.01, 0.10, 0.01, 0.01, 0.0025) },
-                { StandardBlobTier.Archive, new Models.StorageCosts(0.0018, 0.30, 0.15, 0.0015, 0) }
+                { StandardBlobTier.Hot, new Models.StorageCosts(0.0184* 100000, 0.05* 100000, 0.004* 100000, 0, 0) },
+                { StandardBlobTier.Cool, new Models.StorageCosts(0.01* 100000, 0.10* 100000, 0.01* 100000, 0.01* 100000, 0.0025* 100000) },
+                { StandardBlobTier.Archive, new Models.StorageCosts(0.0018* 100000, 0.30* 100000, 0.15* 100000, 0.0015* 100000, 0) }
             };
             var sourceType = GetSourceTypeInput();
             if (sourceType == "L")
@@ -64,22 +65,10 @@ namespace BlobTierAnalysisTool
                 }
                 else
                 {
-                    Console.WriteLine($"Checking if \"{containerToSearch}\" blob container exists in the storage account. Please wait.");
-                    var doesContainerExists = Helpers.BlobStorageHelper.DoesContainerExists(containerToSearch).GetAwaiter().GetResult();
-                    if (!doesContainerExists)
+                    sourcesToScan = new List<string>()
                     {
-                        Console.WriteLine("Specified blob container does not exist. Application will terminate now.");
-                        Console.WriteLine("Press any key to terminate the application");
-                        Console.ReadKey();
-                        ExitApplicationIfRequired("X");
-                    }
-                    else
-                    {
-                        sourcesToScan = new List<string>()
-                        {
-                            {containerToSearch}
-                        };
-                    }
+                        {containerToSearch}
+                    };
                 }
             }
 
@@ -176,6 +165,7 @@ namespace BlobTierAnalysisTool
             Console.WriteLine("{0, 70}{1, 20}", "Total:", (writeTransactionCost + dataTierChangeCost + storageCost).ToString("C"));
             Console.WriteLine(new string('-', 95));
             Console.WriteLine("Please note that all currency values are rounded to the nearest cents.");
+            Console.WriteLine("Please note that pricing displayed above is based on storage pricing in \"US East 2\" region.");
             Console.WriteLine();
         }
 
@@ -205,7 +195,7 @@ namespace BlobTierAnalysisTool
                     var matchingSummaryStatistics = summaryContainerStats.MatchingBlobsStatistics[key];
                     matchingSummaryStatistics.Count += matchingBlobStatistics.Count;
                     matchingSummaryStatistics.Size += matchingBlobStatistics.Size;
-                    matchingSummaryStatistics.Blobs.AddRange(matchingBlobStatistics.Blobs);
+                    matchingSummaryStatistics.BlobNames.AddRange(matchingBlobStatistics.BlobNames);
                     totalMatchingBlobs += matchingBlobStatistics.Count;
                     totalMatchingBlobsSize += matchingBlobStatistics.Size;
                     var blobsSizeCountString = $"{blobStatistics.Count}/{Helpers.Utils.SizeAsString(blobStatistics.Size)} ({blobStatistics.Size} bytes)";
@@ -232,7 +222,7 @@ namespace BlobTierAnalysisTool
                 Console.WriteLine(summaryText);
             }
             Console.WriteLine(new string('-', summaryText.Length));
-            ChooseCostAnalysisOption(summaryContainerStats);
+            DoBlobsCostAnalysis(containersStats);
         }
 
         private static void GetHelpCommandLineArgument()
@@ -248,6 +238,7 @@ namespace BlobTierAnalysisTool
                 Console.WriteLine("/Source:<source>. Specifies analysis source. For \"Local\" source type, it should be the folder path and for \"Cloud\" source type, it could either be the name of a blob container or \"*\" for all blob containers in a storage account.");
                 Console.WriteLine("/Days:<days>. Specifies the age of a blob/local file to be considered for analysis. Must be a value greater than on equal to zero (0).");
                 Console.WriteLine("/Size:<size>. Specifies the size of a blob/local file to be considered for analysis. Must be a value greater than on eqal to zero (0).");
+                Console.WriteLine("/TargetTier:[H]ot, [C]ool or [A]rchive. Specifies the target tier for cost calculations.");
                 Console.WriteLine("/?. Displays the help for command line arguments.");
                 Console.WriteLine();
                 Console.WriteLine("Examples:");
@@ -416,6 +407,17 @@ namespace BlobTierAnalysisTool
             }
             if (Helpers.Utils.IsValidContainerName(containerName))
             {
+                if (containerName != "*")
+                {
+                    Console.WriteLine($"Checking if \"{containerName}\" blob container exists in the storage account. Please wait.");
+                    if (!Helpers.BlobStorageHelper.DoesContainerExists(containerName).GetAwaiter().GetResult())
+                    {
+                        Console.WriteLine("Specified blob container does not exist. Please modify the command line arguments and try again. Application will terminate now.");
+                        Console.WriteLine("Press any key to terminate the application");
+                        Console.ReadKey();
+                        ExitApplicationIfRequired("X");
+                    }
+                }
                 return containerName;
             }
             else
@@ -430,8 +432,21 @@ namespace BlobTierAnalysisTool
                 Console.WriteLine();
                 containerName = Console.ReadLine().Trim().ToLowerInvariant();
                 ExitApplicationIfRequired(containerName);
+                if (string.IsNullOrWhiteSpace(containerName))
+                {
+                    containerName = "*";
+                }
                 if (!string.IsNullOrWhiteSpace(containerName) && Helpers.Utils.IsValidContainerName(containerName))
                 {
+                    if (containerName != "*")
+                    {
+                        Console.WriteLine($"Checking if \"{containerName}\" blob container exists in the storage account. Please wait.");
+                        if (!Helpers.BlobStorageHelper.DoesContainerExists(containerName).GetAwaiter().GetResult())
+                        {
+                            Console.WriteLine("Specified blob container does not exist. Please specify another blob container name.");
+                            return GetContainerInput();
+                        }
+                    }
                     return containerName;
                 }
                 else
@@ -461,7 +476,7 @@ namespace BlobTierAnalysisTool
             }
             Console.WriteLine();
             Console.WriteLine(new string('*', 30));
-            Console.WriteLine("Enter the last modified time (in days) to exclude blobs/files modified after that point in time. If your blobs have never been modified, last modified time is equivalent to creation time. For example, specifying the value 30 will exclude all blobs created or modified in the last 30 days from analysis.");
+            Console.WriteLine("Enter the last modified time (in days) to exclude blobs/files modified after that point in time in cost analysis. If your blobs have never been modified, last modified time is equivalent to creation time. For example, specifying the value 30 will exclude all blobs created or modified in the last 30 days from analysis.");
             Console.WriteLine("Please note that you can also specify this value as command line argument.");
             Console.WriteLine("Simply specify /Days:<numberofdays> in command line.");
             Console.WriteLine("To exit the application, please enter \"X\"");
@@ -475,7 +490,7 @@ namespace BlobTierAnalysisTool
             }
             if (!Int32.TryParse(consoleInput, out numDays) || numDays < 0)
             {
-                Console.WriteLine("Invalid input. Please try again.");
+                Console.WriteLine("Invalid input for last modified time (in days). Please enter a valid numeric value greater than or equal to zero (0). Please try again.");
                 return GetBlobOrFileLastModifiedDateFilterCriteriaInput();
             }
             return numDays;
@@ -514,10 +529,49 @@ namespace BlobTierAnalysisTool
             }
             if (!long.TryParse(consoleInput, out size) || size < 0)
             {
-                Console.WriteLine("Invalid input. Please try again.");
+                Console.WriteLine("Invalid blob/file size input. Please enter a valid numeric value greater than or equal to zero (0). Please try again.");
                 return GetBlobOrFileSizeFilterCriteriaInput();
             }
             return size;
+        }
+
+        /// <summary>
+        /// Reads the target blob tier from command line arguments or via user input. This is used for doing 
+        /// cost calculation.
+        /// </summary>
+        /// <param name="targetTierInput"></param>
+        /// <returns>Target blob tier.</returns>
+        private static StandardBlobTier GetTargetBlobTierInput(string targetTierInput)
+        {
+            var targetTier = StandardBlobTier.Unknown;
+            if (string.IsNullOrWhiteSpace(targetTierInput))
+            {
+                Console.WriteLine(new string('*', 30));
+                Console.WriteLine("Enter the target tier for the blobs for analysis purpose. Valid values are \"A\" (archive tier), \"C\" (cool tier) or \"H\" (hot tier).");
+                Console.WriteLine("Please note that you can also specify this value as command line argument.");
+                Console.WriteLine("Simply specify /TargetTier:<A|C|H> in command line.");
+                Console.WriteLine("To exit the application, please enter \"X\"");
+                Console.WriteLine(new string('*', 30));
+                Console.WriteLine();
+                targetTierInput = Console.ReadLine().Trim().ToUpperInvariant();
+                ExitApplicationIfRequired(targetTierInput);
+            }
+            switch (targetTierInput)
+            {
+                case "A":
+                    targetTier = StandardBlobTier.Archive;
+                    break;
+                case "C":
+                    targetTier = StandardBlobTier.Cool;
+                    break;
+                case "H":
+                    targetTier = StandardBlobTier.Hot;
+                    break;
+                default:
+                    Console.WriteLine("Invalid target tier input. Please enter one of the following values: A, C or H. Please try again.");
+                    return GetTargetBlobTierInput("");
+            }
+            return targetTier;
         }
 
         /// <summary>
@@ -549,130 +603,28 @@ namespace BlobTierAnalysisTool
             return arguments.FirstOrDefault(a => a.StartsWith(argumentToSearch));
         }
 
-        private static void ChooseCostAnalysisOption(Models.ContainerStatistics containerStatisics)
+        private static void DoBlobsCostAnalysis(List<Models.ContainerStatistics> statistics)
         {
-            Console.WriteLine("----------------------------------------------------------------------------------------------------------------");
-            Console.WriteLine("Please select from one of the following options to perform cost analysis:");
-            Console.WriteLine("Enter \"1\" to estimate cost of moving blobs from \"Hot\" access tier to \"Archive\" access tier.");
-            Console.WriteLine("Enter \"2\" to estimate cost of moving blobs from \"Hot\" access tier to \"Cool\" access tier.");
-            Console.WriteLine("Enter \"3\" to estimate cost of moving blobs from \"Cool\" access tier to \"Archive\" access tier.");
-            Console.WriteLine("Enter \"4\" to estimate cost of moving blobs from \"Cool\" access tier to \"Hot\" access tier.");
-            Console.WriteLine("Enter \"5\" to estimate cost of moving blobs from \"Archive\" access tier to \"Hot\" access tier.");
-            Console.WriteLine("Enter \"6\" to estimate cost of moving blobs from \"Archive\" access tier to \"Cool\" access tier.");
-            Console.WriteLine("Enter \"7\" to estimate cost of moving blobs from \"Hot\" and \"Cool\" access tier to \"Archive\" access tier.");
-            Console.WriteLine("Enter \"8\" to estimate cost of moving blobs from \"Hot\" and \"Archive\" access tier to \"Cool\" access tier.");
-            Console.WriteLine("Enter \"9\" to estimate cost of moving blobs from \"Cool\" and \"Archive\" access tier to \"Hot\" access tier.");
-            Console.WriteLine("Enter \"R\" to rerun blobs analysis");
-            Console.WriteLine("Enter \"X\" to terminate the application");
-            Console.WriteLine("----------------------------------------------------------------------------------------------------------------");
-            var consoleInput = Console.ReadLine();
-            ExitApplicationIfRequired(consoleInput);
-            List<StandardBlobTier> sourceTiers = new List<StandardBlobTier>();
-            StandardBlobTier targetTier = StandardBlobTier.Unknown;
-            var scenarioText = string.Empty;
-            switch (consoleInput)
+            var targetTierInput = TryParseCommandLineArgumentsToExtractValue(TargetTierArgumentName);
+            targetTierInput = targetTierInput.Remove(0, TargetTierArgumentName.Length);
+            StandardBlobTier targetTier = GetTargetBlobTierInput(targetTierInput);
+            List<StandardBlobTier> sourceTiers = new List<StandardBlobTier>()
             {
-                case "1":
-                    scenarioText = "Move blobs from \"Hot\" access tier to \"Archive\" access tier";
-                    sourceTiers = new List<StandardBlobTier>()
-                    {
-                        { StandardBlobTier.Hot }
-                    };
-                    targetTier = StandardBlobTier.Archive;
-                    break;
-                case "2":
-                    scenarioText = "Move blobs from \"Hot\" access tier to \"Cool\" access tier.";
-                    sourceTiers = new List<StandardBlobTier>()
-                    {
-                        { StandardBlobTier.Hot }
-                    };
-                    targetTier = StandardBlobTier.Cool;
-                    break;
-                case "3":
-                    scenarioText = "Move blobs from \"Cool\" access tier to \"Archive\" access tier.";
-                    sourceTiers = new List<StandardBlobTier>()
-                    {
-                        { StandardBlobTier.Cool }
-                    };
-                    targetTier = StandardBlobTier.Archive;
-                    break;
-                case "4":
-                    scenarioText = "Move blobs from \"Cool\" access tier to \"Hot\" access tier.";
-                    sourceTiers = new List<StandardBlobTier>()
-                    {
-                        { StandardBlobTier.Cool }
-                    };
-                    targetTier = StandardBlobTier.Hot;
-                    break;
-                case "5":
-                    scenarioText = "Move blobs from \"Archive\" access tier to \"Hot\" access tier.";
-                    sourceTiers = new List<StandardBlobTier>()
-                    {
-                        { StandardBlobTier.Archive }
-                    };
-                    targetTier = StandardBlobTier.Hot;
-                    break;
-                case "6":
-                    scenarioText = "Move blobs from \"Archive\" access tier to \"Cool\" access tier.";
-                    sourceTiers = new List<StandardBlobTier>()
-                    {
-                        { StandardBlobTier.Archive }
-                    };
-                    targetTier = StandardBlobTier.Cool;
-                    break;
-                case "7":
-                    scenarioText = "Move blobs from \"Hot\" and \"Cool\" access tier to \"Archive\" access tier.";
-                    sourceTiers = new List<StandardBlobTier>()
-                    {
-                        { StandardBlobTier.Hot },
-                        { StandardBlobTier.Cool }
-                    };
-                    targetTier = StandardBlobTier.Archive;
-                    break;
-                case "8":
-                    scenarioText = "Move blobs from \"Hot\" and \"Archive\" access tier to \"Cool\" access tier.";
-                    sourceTiers = new List<StandardBlobTier>()
-                    {
-                        { StandardBlobTier.Hot },
-                        { StandardBlobTier.Archive }
-                    };
-                    targetTier = StandardBlobTier.Cool;
-                    break;
-                case "9":
-                    scenarioText = "Move blobs from \"Cool\" and \"Archive\" access tier to \"Hot\" access tier.";
-                    sourceTiers = new List<StandardBlobTier>()
-                    {
-                        { StandardBlobTier.Archive },
-                        { StandardBlobTier.Cool }
-                    };
-                    targetTier = StandardBlobTier.Hot;
-                    break;
-                case "r":
-                case "R":
-                    AnalyzeStorageAccount(sourcesToScan, filterCriteria);
-                    break;
-                default:
-                    Console.WriteLine("Invalid input. Please try again.");
-                    ChooseCostAnalysisOption(containerStatisics);
-                    break;
-            }
-            if (targetTier != StandardBlobTier.Unknown)
-            {
-                DoCostAnalysisBlobs(scenarioText, sourceTiers, targetTier, containerStatisics);
-            }
-        }
-
-        private static void DoCostAnalysisBlobs(string scenarioText, List<StandardBlobTier> sourceTiers, StandardBlobTier targetTier, Models.ContainerStatistics statistics)
-        {
+                StandardBlobTier.Hot,
+                StandardBlobTier.Cool,
+                StandardBlobTier.Archive
+            };
+            sourceTiers.Remove(targetTier);
+            var scenarioText = $"Move blobs from other access tiers to \"{targetTier.ToString()}\" access tier.";
             var storageCostTargetTier = storageCosts[targetTier];
-            double currentStorageCostTargetTier = statistics.MatchingBlobsStatistics[targetTier].Size / Helpers.Constants.GB * storageCostTargetTier.DataStorageCostPerGB;
-            double currentStorageCosts = currentStorageCostTargetTier;
-            long totalCount = statistics.MatchingBlobsStatistics[targetTier].Count;
-            long totalSize = statistics.MatchingBlobsStatistics[targetTier].Size;
-            double storageCostsAfterMove = currentStorageCostTargetTier;
+            double currentStorageCosts = 0;
+            long totalCount = 0;
+            long totalSize = 0;
+            double storageCostsAfterMove = 0.0;
             double dataTierChangeCost = 0.0;
             double dataRetrievalCost = 0.0;
             long totalMatchingBlobs = 0;
+
             Console.WriteLine($"Scenario: {scenarioText}");
             var header = string.Format("{0, 12}{1, 20}{2, 20}{3, 30}", "Access Tier", "Total Blobs Count", "Total Blobs Size", "Storage Costs (Per Month)");
             Console.WriteLine();
@@ -680,22 +632,42 @@ namespace BlobTierAnalysisTool
             Console.WriteLine(new string('-', header.Length));
             Console.WriteLine(header);
             Console.WriteLine(new string('-', header.Length));
-
             foreach (var sourceTier in sourceTiers)
             {
                 var storageCostSourceTier = storageCosts[sourceTier];
-                var matchingItemFromStatistics = statistics.MatchingBlobsStatistics[sourceTier];
-                totalMatchingBlobs += matchingItemFromStatistics.Count;
-                totalCount += matchingItemFromStatistics.Count;
-                totalSize += matchingItemFromStatistics.Size;
-                var currentStorageCostSourceTier = matchingItemFromStatistics.Size / Helpers.Constants.GB * storageCostSourceTier.DataStorageCostPerGB;
-                Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", sourceTier.ToString(), matchingItemFromStatistics.Count, Helpers.Utils.SizeAsString(matchingItemFromStatistics.Size), currentStorageCostSourceTier.ToString("C"));
+                double currentStorageCostSourceTier = 0.0;
+                long totalCountSourceTier = 0;
+                long totalSizeSourceTier = 0;
+                foreach (var containerStatistics in statistics)
+                {
+                    var matchingItem = containerStatistics.MatchingBlobsStatistics[sourceTier];
+                    totalCountSourceTier += matchingItem.Count;
+                    totalSizeSourceTier += matchingItem.Size;
+                    currentStorageCostSourceTier += matchingItem.Size / Helpers.Constants.GB * storageCostSourceTier.DataStorageCostPerGB;
+                }
+                Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", sourceTier.ToString(), totalCountSourceTier, Helpers.Utils.SizeAsString(totalSizeSourceTier), currentStorageCostSourceTier.ToString("C"));
                 currentStorageCosts += currentStorageCostSourceTier;
-                dataTierChangeCost += matchingItemFromStatistics.Count * storageCostSourceTier.WriteOperationsCostPerTenThousand / 10000;
-                dataRetrievalCost += matchingItemFromStatistics.Size / Helpers.Constants.GB * storageCostSourceTier.DataRetrievalCostPerGB;
-                storageCostsAfterMove += matchingItemFromStatistics.Size / Helpers.Constants.GB * storageCostTargetTier.DataStorageCostPerGB;
+                totalMatchingBlobs += totalCountSourceTier;
+                totalCount += totalCountSourceTier;
+                totalSize += totalSizeSourceTier;
+                dataTierChangeCost += totalCountSourceTier * storageCostSourceTier.WriteOperationsCostPerTenThousand / 10000;
+                dataRetrievalCost += totalSizeSourceTier / Helpers.Constants.GB * storageCostSourceTier.DataRetrievalCostPerGB;
+                storageCostsAfterMove += totalSizeSourceTier / Helpers.Constants.GB * storageCostTargetTier.DataStorageCostPerGB;
             }
-            Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", targetTier.ToString(), statistics.MatchingBlobsStatistics[targetTier].Count, Helpers.Utils.SizeAsString(statistics.MatchingBlobsStatistics[targetTier].Size), currentStorageCostTargetTier.ToString("C"));
+            long totalCountTargetTier = 0;
+            long totalSizeTargetTier = 0;
+            double currentStorageCostTargetTier = 0.0;
+            foreach (var containerStatistics in statistics)
+            {
+                var matchingItem = containerStatistics.MatchingBlobsStatistics[targetTier];
+                totalCountTargetTier += matchingItem.Count;
+                totalSizeTargetTier += matchingItem.Size;
+                currentStorageCostTargetTier += matchingItem.Size / Helpers.Constants.GB * storageCostTargetTier.DataStorageCostPerGB;
+            }
+            currentStorageCosts += currentStorageCostTargetTier;
+            totalCount += totalCountTargetTier;
+            totalSize += totalSizeTargetTier;
+            Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", targetTier.ToString(), totalCountTargetTier, Helpers.Utils.SizeAsString(totalSizeTargetTier), currentStorageCostTargetTier.ToString("C"));
             Console.WriteLine(new string('-', header.Length));
             Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", "Total", totalCount, Helpers.Utils.SizeAsString(totalSize), currentStorageCosts.ToString("C"));
             Console.WriteLine(new string('-', header.Length));
@@ -711,57 +683,283 @@ namespace BlobTierAnalysisTool
             Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", targetTier.ToString(), totalCount, Helpers.Utils.SizeAsString(totalSize), storageCostsAfterMove.ToString("C"));
             Console.WriteLine(new string('-', header.Length));
             Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", "Total", totalCount, Helpers.Utils.SizeAsString(totalSize), storageCostsAfterMove.ToString("C"));
-            Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", "Difference", "--", "--", (storageCostsAfterMove- currentStorageCosts).ToString("C"));
+            Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", "Difference", "--", "--", (storageCostsAfterMove - currentStorageCosts).ToString("C"));
             Console.WriteLine(new string('-', header.Length));
-            Console.WriteLine("{0, 62}{1,20}", "One time cost of data retrieval and changing blob access tier:", (dataTierChangeCost+ dataRetrievalCost).ToString("C"));
-            Console.WriteLine("Please note that all currency values are rounded to the nearest cents.");
+            Console.WriteLine("{0, 62}{1,20}", "One time cost of data retrieval and changing blob access tier:", (dataTierChangeCost + dataRetrievalCost).ToString("C"));
+            Console.WriteLine("{0, 62}{1,20}", "Net:", (storageCostsAfterMove - currentStorageCosts + dataTierChangeCost + dataRetrievalCost).ToString("C"));
+            Console.WriteLine(new string('-', header.Length));
             Console.WriteLine();
-            Console.WriteLine($"To change the access tier of the blobs to \"{targetTier.ToString()}\", please enter \"Y\" now.");
+            Console.WriteLine("Please note that all currency values are rounded to the nearest cents.");
+            Console.WriteLine("Please note that pricing displayed above is based on storage pricing in \"US East 2\" region.");
+            Console.WriteLine();
+            Console.WriteLine($"To change the access tier of the blobs to \"{targetTier.ToString()}\", please enter \"Y\" now. Enter any other key to terminate the application.");
             Console.WriteLine("Please be aware of the the one-time costs you will incur for changing the access tiers.");
-            Console.WriteLine("Enter any other key to continue with the cost analysis or \"X\" to terminate the application.");
-            var consoleInput = Console.ReadLine();
-            ExitApplicationIfRequired(consoleInput);
+            var consoleInput = Console.ReadLine().ToUpperInvariant();
             switch (consoleInput)
             {
-                case "y":
                 case "Y":
                     Console.WriteLine($"Changing access tier of the blobs to \"{targetTier.ToString()}\". Please wait.");
                     double successCount = 0;
                     double failureCount = 0;
-                    var matchingTargetTierFromStatistics = statistics.MatchingBlobsStatistics[targetTier];
                     foreach (var sourceTier in sourceTiers)
                     {
-                        var matchingSourceItemFromStatistics = statistics.MatchingBlobsStatistics[sourceTier];
-                        var blobs = matchingSourceItemFromStatistics.Blobs;
-                        var blobsCount = blobs.Count;
-                        for (var i=blobsCount-1; i>=0; i--)
+                        foreach (var containerStatistics in statistics)
                         {
-                            var blob = blobs[i];
-                            var result = Helpers.BlobStorageHelper.ChangeAccessTier(blob, targetTier).GetAwaiter().GetResult();
-                            if (result)
+                            var matchingItem = containerStatistics.MatchingBlobsStatistics[sourceTier];
+                            var blobNames = matchingItem.BlobNames;
+                            foreach (var blobName in blobNames)
                             {
-                                blobs.Remove(blob);
-                                matchingSourceItemFromStatistics.Count -= 1;
-                                matchingSourceItemFromStatistics.Size -= blob.Properties.Length;
-                                matchingTargetTierFromStatistics.Blobs.Add(blob);
-                                matchingTargetTierFromStatistics.Count += 1;
-                                matchingTargetTierFromStatistics.Size += blob.Properties.Length;
-                                successCount += 1;
+                                var result = Helpers.BlobStorageHelper.ChangeAccessTier(containerStatistics.Name, blobName, targetTier).GetAwaiter().GetResult();
+                                if (result)
+                                {
+                                    successCount += 1;
+                                }
+                                else
+                                {
+                                    failureCount += 1;
+                                }
+                                Console.Write("\rSuccessful: {0, 12} Failure: {1, 12}", (successCount / totalMatchingBlobs).ToString("P"), (failureCount / totalMatchingBlobs).ToString("P"));
                             }
-                            else
-                            {
-                                failureCount += 1;
-                            }
-                            Console.Write("\rSuccessful: {0, 12} Failure: {1, 12}", (successCount / totalMatchingBlobs).ToString("P"), (failureCount / totalMatchingBlobs).ToString("P"));
                         }
                     }
                     Console.WriteLine();
-                    ChooseCostAnalysisOption(statistics);
+                    if (successCount > 0)
+                    {
+                        Console.WriteLine($"Successully moved {successCount} to {targetTier.ToString()}.");
+                    }
+                    Console.WriteLine("Press any key to terminate the application.");
+                    Console.ReadKey();
+                    ExitApplicationIfRequired("X");
                     break;
                 default:
-                    ChooseCostAnalysisOption(statistics);
+                    ExitApplicationIfRequired("X");
                     break;
             }
         }
+
+        //private static void ChooseCostAnalysisOption(Models.ContainerStatistics containerStatisics)
+        //{
+        //    var targetTierInput = TryParseCommandLineArgumentsToExtractValue(TargetTierArgumentName);
+        //    targetTierInput = targetTierInput.Remove(0, TargetTierArgumentName.Length);
+        //    StandardBlobTier targetTier = GetTargetBlobTierInput(targetTierInput);
+        //    List<StandardBlobTier> sourceTiers = new List<StandardBlobTier>()
+        //    {
+        //        StandardBlobTier.Hot,
+        //        StandardBlobTier.Cool,
+        //        StandardBlobTier.Archive
+        //    };
+        //    sourceTiers.Remove(targetTier);
+        //    var scenarioText = $"Move blobs from other access tiers to \"{targetTier.ToString()}\" access tier.";
+        //    DoCostAnalysisBlobs(scenarioText, sourceTiers, targetTier, containerStatisics);
+        //    Console.WriteLine("----------------------------------------------------------------------------------------------------------------");
+        //    Console.WriteLine("Please select from one of the following options to perform cost analysis:");
+        //    Console.WriteLine("Enter \"1\" to estimate cost of moving blobs from \"Hot\" access tier to \"Archive\" access tier.");
+        //    Console.WriteLine("Enter \"2\" to estimate cost of moving blobs from \"Hot\" access tier to \"Cool\" access tier.");
+        //    Console.WriteLine("Enter \"3\" to estimate cost of moving blobs from \"Cool\" access tier to \"Archive\" access tier.");
+        //    Console.WriteLine("Enter \"4\" to estimate cost of moving blobs from \"Cool\" access tier to \"Hot\" access tier.");
+        //    Console.WriteLine("Enter \"5\" to estimate cost of moving blobs from \"Archive\" access tier to \"Hot\" access tier.");
+        //    Console.WriteLine("Enter \"6\" to estimate cost of moving blobs from \"Archive\" access tier to \"Cool\" access tier.");
+        //    Console.WriteLine("Enter \"7\" to estimate cost of moving blobs from \"Hot\" and \"Cool\" access tier to \"Archive\" access tier.");
+        //    Console.WriteLine("Enter \"8\" to estimate cost of moving blobs from \"Hot\" and \"Archive\" access tier to \"Cool\" access tier.");
+        //    Console.WriteLine("Enter \"9\" to estimate cost of moving blobs from \"Cool\" and \"Archive\" access tier to \"Hot\" access tier.");
+        //    Console.WriteLine("Enter \"R\" to rerun blobs analysis");
+        //    Console.WriteLine("Enter \"X\" to terminate the application");
+        //    Console.WriteLine("----------------------------------------------------------------------------------------------------------------");
+        //    var consoleInput = Console.ReadLine();
+        //    ExitApplicationIfRequired(consoleInput);
+        //    List<StandardBlobTier> sourceTiers = new List<StandardBlobTier>();
+        //    StandardBlobTier targetTier = StandardBlobTier.Unknown;
+        //    var scenarioText = string.Empty;
+        //    switch (consoleInput)
+        //    {
+        //        case "1":
+        //            scenarioText = "Move blobs from \"Hot\" access tier to \"Archive\" access tier";
+        //            sourceTiers = new List<StandardBlobTier>()
+        //            {
+        //                { StandardBlobTier.Hot }
+        //            };
+        //            targetTier = StandardBlobTier.Archive;
+        //            break;
+        //        case "2":
+        //            scenarioText = "Move blobs from \"Hot\" access tier to \"Cool\" access tier.";
+        //            sourceTiers = new List<StandardBlobTier>()
+        //            {
+        //                { StandardBlobTier.Hot }
+        //            };
+        //            targetTier = StandardBlobTier.Cool;
+        //            break;
+        //        case "3":
+        //            scenarioText = "Move blobs from \"Cool\" access tier to \"Archive\" access tier.";
+        //            sourceTiers = new List<StandardBlobTier>()
+        //            {
+        //                { StandardBlobTier.Cool }
+        //            };
+        //            targetTier = StandardBlobTier.Archive;
+        //            break;
+        //        case "4":
+        //            scenarioText = "Move blobs from \"Cool\" access tier to \"Hot\" access tier.";
+        //            sourceTiers = new List<StandardBlobTier>()
+        //            {
+        //                { StandardBlobTier.Cool }
+        //            };
+        //            targetTier = StandardBlobTier.Hot;
+        //            break;
+        //        case "5":
+        //            scenarioText = "Move blobs from \"Archive\" access tier to \"Hot\" access tier.";
+        //            sourceTiers = new List<StandardBlobTier>()
+        //            {
+        //                { StandardBlobTier.Archive }
+        //            };
+        //            targetTier = StandardBlobTier.Hot;
+        //            break;
+        //        case "6":
+        //            scenarioText = "Move blobs from \"Archive\" access tier to \"Cool\" access tier.";
+        //            sourceTiers = new List<StandardBlobTier>()
+        //            {
+        //                { StandardBlobTier.Archive }
+        //            };
+        //            targetTier = StandardBlobTier.Cool;
+        //            break;
+        //        case "7":
+        //            scenarioText = "Move blobs from \"Hot\" and \"Cool\" access tier to \"Archive\" access tier.";
+        //            sourceTiers = new List<StandardBlobTier>()
+        //            {
+        //                { StandardBlobTier.Hot },
+        //                { StandardBlobTier.Cool }
+        //            };
+        //            targetTier = StandardBlobTier.Archive;
+        //            break;
+        //        case "8":
+        //            scenarioText = "Move blobs from \"Hot\" and \"Archive\" access tier to \"Cool\" access tier.";
+        //            sourceTiers = new List<StandardBlobTier>()
+        //            {
+        //                { StandardBlobTier.Hot },
+        //                { StandardBlobTier.Archive }
+        //            };
+        //            targetTier = StandardBlobTier.Cool;
+        //            break;
+        //        case "9":
+        //            scenarioText = "Move blobs from \"Cool\" and \"Archive\" access tier to \"Hot\" access tier.";
+        //            sourceTiers = new List<StandardBlobTier>()
+        //            {
+        //                { StandardBlobTier.Archive },
+        //                { StandardBlobTier.Cool }
+        //            };
+        //            targetTier = StandardBlobTier.Hot;
+        //            break;
+        //        case "r":
+        //        case "R":
+        //            AnalyzeStorageAccount(sourcesToScan, filterCriteria);
+        //            break;
+        //        default:
+        //            Console.WriteLine("Invalid input. Please try again.");
+        //            ChooseCostAnalysisOption(containerStatisics);
+        //            break;
+        //    }
+        //    if (targetTier != StandardBlobTier.Unknown)
+        //    {
+        //        DoCostAnalysisBlobs(scenarioText, sourceTiers, targetTier, containerStatisics);
+        //    }
+        //}
+
+        //private static void DoCostAnalysisBlobs(string scenarioText, List<StandardBlobTier> sourceTiers, StandardBlobTier targetTier, Models.ContainerStatistics statistics)
+        //{
+        //    var storageCostTargetTier = storageCosts[targetTier];
+        //    double currentStorageCostTargetTier = statistics.MatchingBlobsStatistics[targetTier].Size / Helpers.Constants.GB * storageCostTargetTier.DataStorageCostPerGB;
+        //    double currentStorageCosts = currentStorageCostTargetTier;
+        //    long totalCount = statistics.MatchingBlobsStatistics[targetTier].Count;
+        //    long totalSize = statistics.MatchingBlobsStatistics[targetTier].Size;
+        //    double storageCostsAfterMove = currentStorageCostTargetTier;
+        //    double dataTierChangeCost = 0.0;
+        //    double dataRetrievalCost = 0.0;
+        //    long totalMatchingBlobs = 0;
+        //    Console.WriteLine($"Scenario: {scenarioText}");
+        //    var header = string.Format("{0, 12}{1, 20}{2, 20}{3, 30}", "Access Tier", "Total Blobs Count", "Total Blobs Size", "Storage Costs (Per Month)");
+        //    Console.WriteLine();
+        //    Console.WriteLine("Current Storage Costs:");
+        //    Console.WriteLine(new string('-', header.Length));
+        //    Console.WriteLine(header);
+        //    Console.WriteLine(new string('-', header.Length));
+
+        //    foreach (var sourceTier in sourceTiers)
+        //    {
+        //        var storageCostSourceTier = storageCosts[sourceTier];
+        //        var matchingItemFromStatistics = statistics.MatchingBlobsStatistics[sourceTier];
+        //        totalMatchingBlobs += matchingItemFromStatistics.Count;
+        //        totalCount += matchingItemFromStatistics.Count;
+        //        totalSize += matchingItemFromStatistics.Size;
+        //        var currentStorageCostSourceTier = matchingItemFromStatistics.Size / Helpers.Constants.GB * storageCostSourceTier.DataStorageCostPerGB;
+        //        Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", sourceTier.ToString(), matchingItemFromStatistics.Count, Helpers.Utils.SizeAsString(matchingItemFromStatistics.Size), currentStorageCostSourceTier.ToString("C"));
+        //        currentStorageCosts += currentStorageCostSourceTier;
+        //        dataTierChangeCost += matchingItemFromStatistics.Count * storageCostSourceTier.WriteOperationsCostPerTenThousand / 10000;
+        //        dataRetrievalCost += matchingItemFromStatistics.Size / Helpers.Constants.GB * storageCostSourceTier.DataRetrievalCostPerGB;
+        //        storageCostsAfterMove += matchingItemFromStatistics.Size / Helpers.Constants.GB * storageCostTargetTier.DataStorageCostPerGB;
+        //    }
+        //    Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", targetTier.ToString(), statistics.MatchingBlobsStatistics[targetTier].Count, Helpers.Utils.SizeAsString(statistics.MatchingBlobsStatistics[targetTier].Size), currentStorageCostTargetTier.ToString("C"));
+        //    Console.WriteLine(new string('-', header.Length));
+        //    Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", "Total", totalCount, Helpers.Utils.SizeAsString(totalSize), currentStorageCosts.ToString("C"));
+        //    Console.WriteLine(new string('-', header.Length));
+        //    Console.WriteLine();
+        //    Console.WriteLine("Storage Costs After Migration:");
+        //    Console.WriteLine(new string('-', header.Length));
+        //    Console.WriteLine(header);
+        //    Console.WriteLine(new string('-', header.Length));
+        //    foreach (var sourceTier in sourceTiers)
+        //    {
+        //        Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", sourceTier.ToString(), 0, Helpers.Utils.SizeAsString(0), 0.ToString("C"));
+        //    }
+        //    Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", targetTier.ToString(), totalCount, Helpers.Utils.SizeAsString(totalSize), storageCostsAfterMove.ToString("C"));
+        //    Console.WriteLine(new string('-', header.Length));
+        //    Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", "Total", totalCount, Helpers.Utils.SizeAsString(totalSize), storageCostsAfterMove.ToString("C"));
+        //    Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", "Difference", "--", "--", (storageCostsAfterMove- currentStorageCosts).ToString("C"));
+        //    Console.WriteLine(new string('-', header.Length));
+        //    Console.WriteLine("{0, 62}{1,20}", "One time cost of data retrieval and changing blob access tier:", (dataTierChangeCost+ dataRetrievalCost).ToString("C"));
+        //    Console.WriteLine("Please note that all currency values are rounded to the nearest cents.");
+        //    Console.WriteLine("Please note that pricing displayed above is based on storage pricing in \"US East 2\" region.");
+        //    Console.WriteLine();
+        //    Console.WriteLine($"To change the access tier of the blobs to \"{targetTier.ToString()}\", please enter \"Y\" now. Enter any other key to terminate the application.");
+        //    Console.WriteLine("Please be aware of the the one-time costs you will incur for changing the access tiers.");
+        //    var consoleInput = Console.ReadLine().ToUpperInvariant();
+        //    switch (consoleInput)
+        //    {
+        //        case "Y":
+        //            Console.WriteLine($"Changing access tier of the blobs to \"{targetTier.ToString()}\". Please wait.");
+        //            double successCount = 0;
+        //            double failureCount = 0;
+        //            var matchingTargetTierFromStatistics = statistics.MatchingBlobsStatistics[targetTier];
+        //            foreach (var sourceTier in sourceTiers)
+        //            {
+        //                var matchingSourceItemFromStatistics = statistics.MatchingBlobsStatistics[sourceTier];
+        //                var blobs = matchingSourceItemFromStatistics.Blobs;
+        //                var blobsCount = blobs.Count;
+        //                for (var i=blobsCount-1; i>=0; i--)
+        //                {
+        //                    var blob = blobs[i];
+        //                    var result = Helpers.BlobStorageHelper.ChangeAccessTier(blob, targetTier).GetAwaiter().GetResult();
+        //                    if (result)
+        //                    {
+        //                        blobs.Remove(blob);
+        //                        matchingSourceItemFromStatistics.Count -= 1;
+        //                        matchingSourceItemFromStatistics.Size -= blob.Properties.Length;
+        //                        matchingTargetTierFromStatistics.Blobs.Add(blob);
+        //                        matchingTargetTierFromStatistics.Count += 1;
+        //                        matchingTargetTierFromStatistics.Size += blob.Properties.Length;
+        //                        successCount += 1;
+        //                    }
+        //                    else
+        //                    {
+        //                        failureCount += 1;
+        //                    }
+        //                    Console.Write("\rSuccessful: {0, 12} Failure: {1, 12}", (successCount / totalMatchingBlobs).ToString("P"), (failureCount / totalMatchingBlobs).ToString("P"));
+        //                }
+        //            }
+        //            Console.WriteLine();
+        //            ExitApplicationIfRequired("X");
+        //            break;
+        //        default:
+        //            ExitApplicationIfRequired("X");
+        //            break;
+        //    }
+        //}
     }
 }

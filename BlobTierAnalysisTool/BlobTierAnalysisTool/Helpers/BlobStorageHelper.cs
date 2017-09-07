@@ -113,7 +113,7 @@ namespace BlobTierAnalysisTool.Helpers
                                         var matchingHotAccessTierStats = containerStats.MatchingBlobsStatistics[StandardBlobTier.Hot];
                                         matchingHotAccessTierStats.Count += 1;
                                         matchingHotAccessTierStats.Size += blobSize;
-                                        matchingHotAccessTierStats.Blobs.Add(cloudBlockBlob);
+                                        matchingHotAccessTierStats.BlobNames.Add(cloudBlockBlob.Name);
                                     }
                                     break;
                                 case StandardBlobTier.Cool:
@@ -125,7 +125,7 @@ namespace BlobTierAnalysisTool.Helpers
                                         var matchingCoolAccessTierStats = containerStats.MatchingBlobsStatistics[StandardBlobTier.Cool];
                                         matchingCoolAccessTierStats.Count += 1;
                                         matchingCoolAccessTierStats.Size += blobSize;
-                                        matchingCoolAccessTierStats.Blobs.Add(cloudBlockBlob);
+                                        matchingCoolAccessTierStats.BlobNames.Add(cloudBlockBlob.Name);
                                     }
                                     break;
                                 case StandardBlobTier.Archive:
@@ -137,7 +137,7 @@ namespace BlobTierAnalysisTool.Helpers
                                         var matchingArchiveAccessTierStats = containerStats.MatchingBlobsStatistics[StandardBlobTier.Archive];
                                         matchingArchiveAccessTierStats.Count += 1;
                                         matchingArchiveAccessTierStats.Size += blobSize;
-                                        matchingArchiveAccessTierStats.Blobs.Add(cloudBlockBlob);
+                                        matchingArchiveAccessTierStats.BlobNames.Add(cloudBlockBlob.Name);
                                     }
                                     break;
                             }
@@ -160,10 +160,11 @@ namespace BlobTierAnalysisTool.Helpers
         /// <param name="blobName">Name of the blob.</param>
         /// <param name="targetTier"><see cref="StandardBlobTier"/> which indicates the new access tier for the blob.</param>
         /// <returns>True or false.</returns>
-        public static async Task<bool> ChangeAccessTier(CloudBlockBlob blob, StandardBlobTier targetTier)
+        public static async Task<bool> ChangeAccessTier(string containerName, string blobName, StandardBlobTier targetTier)
         {
             try
             {
+                CloudBlockBlob blob = StorageAccount.CreateCloudBlobClient().GetContainerReference(containerName).GetBlockBlobReference(blobName);
                 await blob.SetStandardBlobTierAsync(targetTier);
                 return true;
             }

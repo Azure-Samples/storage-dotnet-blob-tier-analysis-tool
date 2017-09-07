@@ -9,11 +9,11 @@ namespace BlobTierAnalysisTool.Models
 {
     public class BlobsStatistics
     {
-        private readonly List<CloudBlockBlob> _blobs;
+        private readonly List<string> _blobNames;
 
         public BlobsStatistics()
         {
-            _blobs = new List<CloudBlockBlob>();
+            _blobNames = new List<string>();
         }
 
         /// <summary>
@@ -29,9 +29,9 @@ namespace BlobTierAnalysisTool.Models
         /// <summary>
         /// Gets a list of blob names.
         /// </summary>
-        public List<CloudBlockBlob> Blobs
+        public List<string> BlobNames
         {
-            get { return _blobs; }
+            get { return _blobNames; }
         }
     }
 }
