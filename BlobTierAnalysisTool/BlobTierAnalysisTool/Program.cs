@@ -22,20 +22,21 @@ namespace BlobTierAnalysisTool
         static void Main(string[] args)
         {
             Console.WriteLine("*********************************************************************************");
-            Console.WriteLine("Welcome to the Blob Tier Ananlysis Tool. This tool can:");
+            Console.WriteLine("Welcome to the Blob Tier Analysis Tool. This tool can:");
             Console.WriteLine("1. Analyze the contents of a local folder/file share and give you an");
             Console.WriteLine("   estimate of storage costs for different access tiers (Hot, Cool, Archive)");
             Console.WriteLine("   should you decide to store the files in Azure Storage.");
             Console.WriteLine("2. Analyze one or more blob containers in your existing Azure storage account");
             Console.WriteLine("   and give you an estimate of storage costs for different access tiers. ");
-            Console.WriteLine("   This tool can also move blobs across different access tiers for you,");
-            Console.WriteLine("   should you choose.");
+            Console.WriteLine("3. Based on analysis, move blobs across different access tiers for you.");
             Console.WriteLine();
-            Console.WriteLine("For number 2, please note that currently this tool will only work when using");
+            Console.WriteLine("For number 3, please note that currently this tool will only work when using");
             Console.WriteLine("a \"Blob Storage\" account with LRS redundancy in the \"US East 2\" region");
             Console.WriteLine("where the parent subscription is enabled for the archive feature.");
             Console.WriteLine();
+            Console.WriteLine("For more details on public preview of object-level tiering and archive storage,"); 
             Console.WriteLine("Please read https://azure.microsoft.com/en-us/blog/announcing-the-public-preview-of-azure-archive-blob-storage-and-blob-level-tiering/ for more details");
+            Console.WriteLine();
             Console.WriteLine("*********************************************************************************");
             Console.WriteLine();
             GetHelpCommandLineArgument();
@@ -60,7 +61,7 @@ namespace BlobTierAnalysisTool
                 var containerToSearch = GetContainerInput();
                 if (containerToSearch == "*")
                 {
-                    Console.WriteLine($"Listing blob containers in \"{Helpers.BlobStorageHelper.StorageAccount.Credentials.AccountName}\" storage account. Please wait.");
+                    Console.WriteLine($"Listing blob containers in \"{Helpers.BlobStorageHelper.StorageAccount.Credentials.AccountName}\" storage account...");
                     sourcesToScan = Helpers.BlobStorageHelper.ListContainers().GetAwaiter().GetResult();
                 }
                 else
@@ -99,7 +100,7 @@ namespace BlobTierAnalysisTool
             var text = string.Empty;
             foreach (var folderName in folderNames)
             {
-                Console.WriteLine($"Analyzing files in \"{folderName}\" folder. Please wait.");
+                Console.WriteLine($"Analyzing files in \"{folderName}\" folder...");
                 var folderStatistics = Helpers.FileSystemHelper.AnalyzeFolder(folderName, filterCriteria);
                 summaryFoldersStatistics.FilesStatistics.Count += folderStatistics.FilesStatistics.Count;
                 summaryFoldersStatistics.FilesStatistics.Size += folderStatistics.FilesStatistics.Size;
@@ -126,7 +127,7 @@ namespace BlobTierAnalysisTool
             Console.WriteLine(new string('-', text.Length));
             Console.WriteLine();
             Console.WriteLine("Cost Estimator");
-            Console.WriteLine("Scenario 1: Upload these files to Azure Storage and keep all blobs in \"Hot\" access tier");
+            Console.WriteLine("Scenario 1: Upload files to Azure Storage and keep all blobs in \"Hot\" access tier");
             var storageCostsHotAccessTier = storageCosts[StandardBlobTier.Hot];
             var storageCostsCoolAccessTier = storageCosts[StandardBlobTier.Cool];
             var storageCostsArchiveAccessTier = storageCosts[StandardBlobTier.Archive];
@@ -141,7 +142,7 @@ namespace BlobTierAnalysisTool
             Console.WriteLine("{0, 70}{1, 20}", "Total:", (writeTransactionCost+storageCost).ToString("C"));
             Console.WriteLine(new string('-', 95));
             Console.WriteLine();
-            Console.WriteLine("Scenario 2: Upload these files to Azure Storage and keep all blobs in \"Cool\" access tier");
+            Console.WriteLine("Scenario 2: Upload files to Azure Storage and keep all blobs in \"Cool\" access tier");
             writeTransactionCost = storageCostsHotAccessTier.WriteOperationsCostPerTenThousand * totalFiles / 10000;
             storageCost = storageCostsCoolAccessTier.DataStorageCostPerGB * totalSize / Helpers.Constants.GB;
             var dataTierChangeCost = storageCostsCoolAccessTier.WriteOperationsCostPerTenThousand * totalFiles / 10000;
@@ -153,7 +154,7 @@ namespace BlobTierAnalysisTool
             Console.WriteLine("{0, 70}{1, 20}", "Total:", (writeTransactionCost + dataTierChangeCost + storageCost).ToString("C"));
             Console.WriteLine(new string('-', 95));
             Console.WriteLine();
-            Console.WriteLine("Scenario 3: Upload these files to Azure Storage and keep all blobs in \"Archive\" access tier");
+            Console.WriteLine("Scenario 3: Upload files to Azure Storage and keep all blobs in \"Archive\" access tier");
             writeTransactionCost = storageCostsHotAccessTier.WriteOperationsCostPerTenThousand * totalFiles / 10000;
             storageCost = storageCostsArchiveAccessTier.DataStorageCostPerGB * totalSize / Helpers.Constants.GB;
             dataTierChangeCost = storageCostsArchiveAccessTier.WriteOperationsCostPerTenThousand * totalFiles / 10000;
@@ -164,8 +165,8 @@ namespace BlobTierAnalysisTool
             Console.WriteLine(new string('-', 95));
             Console.WriteLine("{0, 70}{1, 20}", "Total:", (writeTransactionCost + dataTierChangeCost + storageCost).ToString("C"));
             Console.WriteLine(new string('-', 95));
-            Console.WriteLine("Please note that all currency values are rounded to the nearest cents.");
-            Console.WriteLine("Please note that pricing displayed above is based on storage pricing in \"US East 2\" region.");
+            Console.WriteLine("*All currency values are rounded to the nearest cent.");
+            Console.WriteLine("*The pricing displayed above is based on storage pricing in \"US East 2\" region.");
             Console.WriteLine();
         }
 
@@ -177,7 +178,7 @@ namespace BlobTierAnalysisTool
             var summaryContainerStats = new Models.ContainerStatistics("Summary");
             foreach (var containerName in containerNames)
             {
-                Console.WriteLine($"Analyzing blobs in \"{containerName}\" blob container. Please wait.");
+                Console.WriteLine($"Analyzing blobs in \"{containerName}\" blob container...");
                 var containerStats = Helpers.BlobStorageHelper.AnalyzeContainer(containerName, filterCriteria).GetAwaiter().GetResult();
                 containersStats.Add(containerStats);
                 var text = string.Format("{0, 12}{1, 40}{2, 40}", "Access Tier", "Total Blobs Count/Size", "Matching Blobs Count/Size");
@@ -230,29 +231,32 @@ namespace BlobTierAnalysisTool
             var helpCommandLineArgument = TryParseCommandLineArgumentsToExtractValue(HelpArgumentName);
             if (!string.IsNullOrWhiteSpace(helpCommandLineArgument))
             {
-                Console.WriteLine("You can run this application in non-interactive mode.");
+                Console.WriteLine("You can run this application in non-interactive mode");
+                Console.WriteLine();
                 Console.WriteLine("Usage:");
-                Console.WriteLine("BlobTierAnalysisTool </SourceType:> </ConnectionString:> </Source:> </Days:> </Size>");
-                Console.WriteLine("/SourceType:<source type either [L]ocal or [C]loud>. Specifies the type of source you want to analyze.");
-                Console.WriteLine("/ConnectionString:<connection string>. Specifies storage account connection string.");
-                Console.WriteLine("/Source:<source>. Specifies analysis source. For \"Local\" source type, it should be the folder path and for \"Cloud\" source type, it could either be the name of a blob container or \"*\" for all blob containers in a storage account.");
-                Console.WriteLine("/Days:<days>. Specifies the age of a blob/local file to be considered for analysis. Must be a value greater than on equal to zero (0).");
-                Console.WriteLine("/Size:<size>. Specifies the size of a blob/local file to be considered for analysis. Must be a value greater than on eqal to zero (0).");
-                Console.WriteLine("/TargetTier:[H]ot, [C]ool or [A]rchive. Specifies the target tier for cost calculations.");
+                Console.WriteLine("BlobTierAnalysisTool </SourceType:> </ConnectionString:> </Source:> </Days:> </Size:> </TargetTier:>");
+                Console.WriteLine();
+                Console.WriteLine("/SourceType:<Either [L]ocal or [C]loud>. Specifies the type of source you want to analyze.");
+                Console.WriteLine("/ConnectionString:<Storage account connection string>. Specifies storage account connection string.");
+                Console.WriteLine("/Source:<Analysis source>. Specifies analysis source. For \"Local\" source type, it should be the folder path and for \"Cloud\" source type, it could either be the name of a blob container or \"*\" for all blob containers.");
+                Console.WriteLine("/Days:<Last modified time in days>. Specifies the minimum last modified time (in days before the present time) of a blob / local file to be considered for analysis. Must be a value greater than on equal to zero (0).");
+                Console.WriteLine("/Size:<Minimum file size>. Specifies the minimum size of a blob / local file to be considered for analysis. Must be a value greater than on eqal to zero (0).");
+                Console.WriteLine("/TargetTier:<Either [H]ot, [C]ool or [A]rchive>. Specifies the target tier for cost calculations.");
                 Console.WriteLine("/?. Displays the help for command line arguments.");
                 Console.WriteLine();
                 Console.WriteLine("Examples:");
+                Console.WriteLine();
                 var str = "Analyze a local folder";
                 Console.WriteLine(str);
                 Console.WriteLine(new string('-', str.Length));
                 Console.WriteLine("BlobTierAnalysisTool /SourceType:L /Source:C:\temp /Days:30 /Size:1024");
-                Console.WriteLine("Analyzes all files in \"C:\temp\" directory that have not been modified for last 30 days and are greater than or equal to 1KB in size");
+                Console.WriteLine("Analyzes all files in \"C:\temp\" directory that have not been modified for the last 30 days and are greater than or equal to 1KB in size");
                 Console.WriteLine();
                 str = "Analyze a blob container in a storage account.";
                 Console.WriteLine(str);
                 Console.WriteLine(new string('-', str.Length));
                 Console.WriteLine("BlobTierAnalysisTool /SourceType:C /ConnectionString:DefaultEndpointsProtocol=https;AccountName=accountname;AccountKey=accountkey==;EndpointSuffix=core.windows.net /Source:temp /Days:30 /Size:1024");
-                Console.WriteLine("Analyzes all blobs in \"temp\" blob container in \"accountname\" storage account that have not been modified for last 30 days and are greater than or equal to 1KB in size");
+                Console.WriteLine("Analyzes all blobs in \"temp\" blob container in the \"accountname\" storage account that have not been modified for last 30 days and are greater than or equal to 1KB in size");
                 Console.WriteLine();
                 str = "Analyze all blob containers in a storage account.";
                 Console.WriteLine(str);
@@ -286,11 +290,8 @@ namespace BlobTierAnalysisTool
             else
             {
                 Console.WriteLine(new string('*', 30));
-                Console.WriteLine("Please enter the source type you want to analyze.");
-                Console.WriteLine("Valid values are [L]ocal or [C]loud.");
-                Console.WriteLine("Please note that you can also specify source type as command line argument.");
-                Console.WriteLine("Simply specify /SourceType:<L|C> in command line.");
-                Console.WriteLine("To exit the application, please enter \"X\"");
+                Console.WriteLine("Enter the source type you want to analyze. Valid values are [L]ocal or [C]loud.");
+                Console.WriteLine("To exit the application, enter \"X\"");
                 Console.WriteLine(new string('*', 30));
                 sourceType = Console.ReadLine().ToUpperInvariant();
                 ExitApplicationIfRequired(sourceType);
@@ -300,7 +301,7 @@ namespace BlobTierAnalysisTool
                 }
                 else
                 {
-                    Console.WriteLine("Invalid input. Please specify either \"L\" or \"C\" as source type");
+                    Console.WriteLine("Invalid input. Specify either \"L\" or \"C\" as source type");
                     return GetSourceTypeInput();
                 }
             }
@@ -328,9 +329,7 @@ namespace BlobTierAnalysisTool
                 Console.WriteLine();
                 Console.WriteLine(new string('*', 30));
                 Console.WriteLine("Enter the full path of a directory that you want to analyze.");
-                Console.WriteLine("Please note that you can also specify folder path as command line argument.");
-                Console.WriteLine("Simply specify /Source:<fullpath> in command line.");
-                Console.WriteLine("To exit the application, please enter \"X\"");
+                Console.WriteLine("To exit the application, enter \"X\"");
                 Console.WriteLine(new string('*', 30));
                 Console.WriteLine();
                 folderName = Console.ReadLine().Trim().ToLowerInvariant();
@@ -367,12 +366,8 @@ namespace BlobTierAnalysisTool
             else
             {
                 Console.WriteLine(new string('*', 30));
-                Console.WriteLine("Please enter connection string for your storage account.");
-                Console.WriteLine("Connection string should be in the following format:");
-                Console.WriteLine("DefaultEndpointsProtocol=https;AccountName=<youraccountname>;AccountKey=<youraccountkey>");
-                Console.WriteLine("Please note that you can also specify connection string as command line argument.");
-                Console.WriteLine("Simply specify /ConnectionString:<yourconnectionstring> in command line.");
-                Console.WriteLine("To exit the application, please enter \"X\"");
+                Console.WriteLine("Enter connection string for your storage account in the following format: DefaultEndpointsProtocol=https;AccountName=<youraccountname>;AccountKey=<youraccountkey>");
+                Console.WriteLine("To exit the application, enter \"X\"");
                 Console.WriteLine(new string('*', 30));
                 connectionString = Console.ReadLine();
                 ExitApplicationIfRequired(connectionString);
@@ -409,10 +404,10 @@ namespace BlobTierAnalysisTool
             {
                 if (containerName != "*")
                 {
-                    Console.WriteLine($"Checking if \"{containerName}\" blob container exists in the storage account. Please wait.");
+                    Console.WriteLine($"Checking if \"{containerName}\" blob container exists in the storage account...");
                     if (!Helpers.BlobStorageHelper.DoesContainerExists(containerName).GetAwaiter().GetResult())
                     {
-                        Console.WriteLine("Specified blob container does not exist. Please modify the command line arguments and try again. Application will terminate now.");
+                        Console.WriteLine("Specified blob container does not exist. Please modify the command line arguments and try again. Terminating application.");
                         Console.WriteLine("Press any key to terminate the application");
                         Console.ReadKey();
                         ExitApplicationIfRequired("X");
@@ -424,10 +419,9 @@ namespace BlobTierAnalysisTool
             {
                 Console.WriteLine();
                 Console.WriteLine(new string('*', 30));
-                Console.WriteLine("Enter the blob container name that you want to analyze. To analyze all blob containers, please enter *");
-                Console.WriteLine("Please note that you can also specify container name as command line argument.");
-                Console.WriteLine("Simply specify /Source:<blobcontainername> in command line.");
-                Console.WriteLine("To exit the application, please enter \"X\"");
+                Console.WriteLine("Enter the blob container name that you want to analyze. To analyze all blob containers, enter \"*\".");
+                Console.WriteLine("Press the \"Enter\" key for default value (*, all containers)");
+                Console.WriteLine("To exit the application, enter \"X\"");
                 Console.WriteLine(new string('*', 30));
                 Console.WriteLine();
                 containerName = Console.ReadLine().Trim().ToLowerInvariant();
@@ -440,10 +434,10 @@ namespace BlobTierAnalysisTool
                 {
                     if (containerName != "*")
                     {
-                        Console.WriteLine($"Checking if \"{containerName}\" blob container exists in the storage account. Please wait.");
+                        Console.WriteLine($"Checking if \"{containerName}\" blob container exists in the storage account...");
                         if (!Helpers.BlobStorageHelper.DoesContainerExists(containerName).GetAwaiter().GetResult())
                         {
-                            Console.WriteLine("Specified blob container does not exist. Please specify another blob container name.");
+                            Console.WriteLine("Specified blob container does not exist. Please try again.");
                             return GetContainerInput();
                         }
                     }
@@ -476,10 +470,11 @@ namespace BlobTierAnalysisTool
             }
             Console.WriteLine();
             Console.WriteLine(new string('*', 30));
-            Console.WriteLine("Enter the last modified time (in days) to exclude blobs/files modified after that point in time in cost analysis. If your blobs have never been modified, last modified time is equivalent to creation time. For example, specifying the value 30 will exclude all blobs created or modified in the last 30 days from analysis.");
-            Console.WriteLine("Please note that you can also specify this value as command line argument.");
-            Console.WriteLine("Simply specify /Days:<numberofdays> in command line.");
-            Console.WriteLine("To exit the application, please enter \"X\"");
+            Console.WriteLine("Enter the minimum last modified time (in days before the present time) of a blob / local file to be considered for analysis.");
+            Console.WriteLine("If your blobs have never been modified, last modified time is equivalent to creation time.");
+            Console.WriteLine("For example, specifying the value 30 will exclude all blobs created or modified in the last 30 days from analysis.");
+            Console.WriteLine("Press the \"Enter\" key for default value (30 days).");
+            Console.WriteLine("To exit the application, enter \"X\"");
             Console.WriteLine(new string('*', 30));
             Console.WriteLine();
             var consoleInput = Console.ReadLine().Trim().ToLowerInvariant();
@@ -490,7 +485,7 @@ namespace BlobTierAnalysisTool
             }
             if (!Int32.TryParse(consoleInput, out numDays) || numDays < 0)
             {
-                Console.WriteLine("Invalid input for last modified time (in days). Please enter a valid numeric value greater than or equal to zero (0). Please try again.");
+                Console.WriteLine("Invalid input for last modified time. Enter a valid numeric value greater than or equal to zero (0).");
                 return GetBlobOrFileLastModifiedDateFilterCriteriaInput();
             }
             return numDays;
@@ -515,10 +510,9 @@ namespace BlobTierAnalysisTool
             }
             Console.WriteLine();
             Console.WriteLine(new string('*', 30));
-            Console.WriteLine("Enter the minimum size of the blob/file in bytes to be considered for analysis. Press \"Enter\" key for default value (0 bytes).");
-            Console.WriteLine("Please note that you can also specify this value as command line argument.");
-            Console.WriteLine("Simply specify /Size:<minimumsizeinbytes> in command line.");
-            Console.WriteLine("To exit the application, please enter \"X\"");
+            Console.WriteLine("Enter the minimum size of a blob / file (in bytes) to be considered for analysis.");
+            Console.WriteLine("Press the \"Enter\" key for default value (0 bytes).");
+            Console.WriteLine("To exit the application, enter \"X\"");
             Console.WriteLine(new string('*', 30));
             Console.WriteLine();
             var consoleInput = Console.ReadLine().Trim().ToLowerInvariant();
@@ -529,7 +523,7 @@ namespace BlobTierAnalysisTool
             }
             if (!long.TryParse(consoleInput, out size) || size < 0)
             {
-                Console.WriteLine("Invalid blob/file size input. Please enter a valid numeric value greater than or equal to zero (0). Please try again.");
+                Console.WriteLine("Invalid blob/file size input. Please enter a valid numeric value greater than or equal to zero (0).");
                 return GetBlobOrFileSizeFilterCriteriaInput();
             }
             return size;
@@ -547,10 +541,8 @@ namespace BlobTierAnalysisTool
             if (string.IsNullOrWhiteSpace(targetTierInput))
             {
                 Console.WriteLine(new string('*', 30));
-                Console.WriteLine("Enter the target tier for the blobs for analysis purpose. Valid values are \"A\" (archive tier), \"C\" (cool tier) or \"H\" (hot tier).");
-                Console.WriteLine("Please note that you can also specify this value as command line argument.");
-                Console.WriteLine("Simply specify /TargetTier:<A|C|H> in command line.");
-                Console.WriteLine("To exit the application, please enter \"X\"");
+                Console.WriteLine("Enter the target tier for analysis. Valid values are \"A\" (archive tier), \"C\" (cool tier) or \"H\" (hot tier).");
+                Console.WriteLine("To exit the application, enter \"X\"");
                 Console.WriteLine(new string('*', 30));
                 Console.WriteLine();
                 targetTierInput = Console.ReadLine().Trim().ToUpperInvariant();
@@ -568,7 +560,7 @@ namespace BlobTierAnalysisTool
                     targetTier = StandardBlobTier.Hot;
                     break;
                 default:
-                    Console.WriteLine("Invalid target tier input. Please enter one of the following values: A, C or H. Please try again.");
+                    Console.WriteLine("Invalid target tier input. Please enter one of the following values: \"A\", \"C\" or \"H\".");
                     return GetTargetBlobTierInput("");
             }
             return targetTier;
@@ -606,7 +598,10 @@ namespace BlobTierAnalysisTool
         private static void DoBlobsCostAnalysis(List<Models.ContainerStatistics> statistics)
         {
             var targetTierInput = TryParseCommandLineArgumentsToExtractValue(TargetTierArgumentName);
-            targetTierInput = targetTierInput.Remove(0, TargetTierArgumentName.Length);
+            if (!String.IsNullOrWhiteSpace(targetTierInput))
+            {
+                targetTierInput = targetTierInput.Remove(0, TargetTierArgumentName.Length);
+            }
             StandardBlobTier targetTier = GetTargetBlobTierInput(targetTierInput);
             List<StandardBlobTier> sourceTiers = new List<StandardBlobTier>()
             {
@@ -683,22 +678,22 @@ namespace BlobTierAnalysisTool
             Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", targetTier.ToString(), totalCount, Helpers.Utils.SizeAsString(totalSize), storageCostsAfterMove.ToString("C"));
             Console.WriteLine(new string('-', header.Length));
             Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", "Total", totalCount, Helpers.Utils.SizeAsString(totalSize), storageCostsAfterMove.ToString("C"));
-            Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", "Difference", "--", "--", (storageCostsAfterMove - currentStorageCosts).ToString("C"));
+            Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", "Savings", "--", "--", (storageCostsAfterMove - currentStorageCosts).ToString("C"));
             Console.WriteLine(new string('-', header.Length));
             Console.WriteLine("{0, 62}{1,20}", "One time cost of data retrieval and changing blob access tier:", (dataTierChangeCost + dataRetrievalCost).ToString("C"));
-            Console.WriteLine("{0, 62}{1,20}", "Net:", (storageCostsAfterMove - currentStorageCosts + dataTierChangeCost + dataRetrievalCost).ToString("C"));
+            Console.WriteLine("{0, 62}{1,20}", "Net Savings:", (storageCostsAfterMove - currentStorageCosts + dataTierChangeCost + dataRetrievalCost).ToString("C"));
             Console.WriteLine(new string('-', header.Length));
             Console.WriteLine();
-            Console.WriteLine("Please note that all currency values are rounded to the nearest cents.");
-            Console.WriteLine("Please note that pricing displayed above is based on storage pricing in \"US East 2\" region.");
+            Console.WriteLine("*All currency values are rounded to the nearest cent.");
+            Console.WriteLine("*The pricing displayed above is based on storage pricing in \"US East 2\" region.");
             Console.WriteLine();
-            Console.WriteLine($"To change the access tier of the blobs to \"{targetTier.ToString()}\", please enter \"Y\" now. Enter any other key to terminate the application.");
-            Console.WriteLine("Please be aware of the the one-time costs you will incur for changing the access tiers.");
+            Console.WriteLine($"To change the access tier of the blobs to \"{targetTier.ToString()}\", enter \"Y\" now. Enter any other key to terminate the application.");
+            Console.WriteLine("*Please be aware of the the one-time costs you will incur for changing the access tiers.");
             var consoleInput = Console.ReadLine().ToUpperInvariant();
             switch (consoleInput)
             {
                 case "Y":
-                    Console.WriteLine($"Changing access tier of the blobs to \"{targetTier.ToString()}\". Please wait.");
+                    Console.WriteLine($"Changing access tier of the blobs to \"{targetTier.ToString()}\"...");
                     double successCount = 0;
                     double failureCount = 0;
                     foreach (var sourceTier in sourceTiers)
