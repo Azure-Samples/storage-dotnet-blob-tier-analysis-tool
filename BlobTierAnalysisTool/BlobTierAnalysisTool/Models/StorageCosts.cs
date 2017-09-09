@@ -1,4 +1,8 @@
-﻿namespace BlobTierAnalysisTool.Models
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using System;
+
+namespace BlobTierAnalysisTool.Models
 {
     public class StorageCosts
     {
@@ -30,5 +34,33 @@
         public double DataRetrievalCostPerGB { get { return _dataRetrievalCostPerGB; } }
 
         public double DataWriteCostPerGB { get { return _dataWriteCostPerGB; } }
+
+        public static StorageCosts FromJson(JToken json)
+        {
+            if (json == null) return null;
+            try
+            {
+                double dataStorageCostPerGB = 0;
+                double writeOperationsCostPerTenThousand = 0;
+                double readOperationsCostPerTenThousand = 0;
+                double dataRetrievalCostPerGB = 0;
+                double dataWriteCostPerGB = 0;
+                JToken token = json["DataStorageCostPerGB"];
+                double.TryParse(token.ToString(), out dataStorageCostPerGB);
+                token = json["WriteOperationsCostPerTenThousand"];
+                double.TryParse(token.ToString(), out writeOperationsCostPerTenThousand);
+                token = json["ReadOperationsCostPerTenThousand"];
+                double.TryParse(token.ToString(), out readOperationsCostPerTenThousand);
+                token = json["DataRetrievalCostPerGB"];
+                double.TryParse(token.ToString(), out dataRetrievalCostPerGB);
+                token = json["DataWriteCostPerGB"];
+                double.TryParse(token.ToString(), out dataWriteCostPerGB);
+                return new StorageCosts(dataStorageCostPerGB, writeOperationsCostPerTenThousand, readOperationsCostPerTenThousand, dataRetrievalCostPerGB, dataWriteCostPerGB);
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
     }
 }
