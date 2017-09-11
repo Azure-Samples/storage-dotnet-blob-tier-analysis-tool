@@ -19,6 +19,8 @@ namespace BlobTierAnalysisTool
         private const string DaysArgumentName = "/Days:";
         private const string SizeArgumentName = "/Size:";
         private const string TargetTierArgumentName = "/TargetTier:";
+        private const string ReadPercentagePerMonthArgumentName = "/ReadPercentagePerMonth:";
+
         private static Dictionary<StandardBlobTier, Models.StorageCosts> storageCosts = null;
         private static IEnumerable<string> sourcesToScan = null;
         private static Models.FilterCriteria filterCriteria = null;
@@ -76,7 +78,7 @@ namespace BlobTierAnalysisTool
                     };
                 }
             }
-
+            var readPercentagePerMonth = GetReadPercentagePerMonthInput();
             var numDaysSinceLastModifiedFilterCriteria = GetBlobOrFileLastModifiedDateFilterCriteriaInput();
             var blobSizeFilterCriteria = GetBlobOrFileSizeFilterCriteriaInput();
             filterCriteria = new Models.FilterCriteria()
@@ -86,18 +88,18 @@ namespace BlobTierAnalysisTool
             };
             if (sourceType == "L")
             {
-                AnalyzeLocalStorage(sourcesToScan, filterCriteria);
+                AnalyzeLocalStorage(sourcesToScan, filterCriteria, readPercentagePerMonth);
             }
             else
             {
-                AnalyzeStorageAccount(sourcesToScan, filterCriteria);
+                AnalyzeStorageAccount(sourcesToScan, filterCriteria, readPercentagePerMonth);
             }
 
             Console.WriteLine("Press any key to terminate the application.");
             Console.ReadLine();
         }
 
-        private static void AnalyzeLocalStorage(IEnumerable<string> folderNames, Models.FilterCriteria filterCriteria)
+        private static void AnalyzeLocalStorage(IEnumerable<string> folderNames, Models.FilterCriteria filterCriteria, double readPercentagePerMonth)
         {
             List<Models.FolderStatistics> foldersStatistics = new List<Models.FolderStatistics>();
             Models.FolderStatistics summaryFoldersStatistics = new Models.FolderStatistics("Summary");
@@ -137,16 +139,22 @@ namespace BlobTierAnalysisTool
             var storageCostsArchiveAccessTier = storageCosts[StandardBlobTier.Archive];
             var totalFiles = summaryFoldersStatistics.MatchingFilesStatistics.Count;
             var totalSize = summaryFoldersStatistics.MatchingFilesStatistics.Size;
-            double writeTransactionCost, storageCost, dataTierChangeCost;
+            var readTransactions = totalFiles * readPercentagePerMonth / 100;
+            var readOperations = totalSize * readPercentagePerMonth / 100;
+            double writeTransactionsCost, storageCost, dataTierChangeCost;
             if (storageCostsHotAccessTier != null)
             {
-                writeTransactionCost = storageCostsHotAccessTier.WriteOperationsCostPerTenThousand * totalFiles / 10000;
+                writeTransactionsCost = storageCostsHotAccessTier.WriteOperationsCostPerTenThousand * totalFiles / 10000;
                 storageCost = storageCostsHotAccessTier.DataStorageCostPerGB * totalSize / Helpers.Constants.GB;
+                //For calculation of read costs in "Hot" access tier, this is the formula used:
+                //read cost = # of blobs read x read transaction cost / 10000.
+                var totalReadsCostPerMonth = CalculateReadsCost(StandardBlobTier.Hot, readTransactions, readOperations, storageCosts);
                 Console.WriteLine(new string('-', 95));
-                Console.WriteLine("{0, 70}{1, 20}", "One time cost of uploading files in Azure Storage:", writeTransactionCost.ToString("C"));
-                Console.WriteLine("{0, 70}{1, 20}", "Storage costs/month:", storageCost.ToString("C"));
+                Console.WriteLine("{0, 70}{1, 20}", "One time cost of uploading files in Azure Storage:", writeTransactionsCost.ToString("C"));
+                Console.WriteLine("{0, 70}{1, 20}", "Storage cost/month:", storageCost.ToString("C"));
+                Console.WriteLine("{0, 70}{1, 20}", "Blob reads cost/month:", totalReadsCostPerMonth.HasValue ? totalReadsCostPerMonth.Value.ToString("C") : "--");
                 Console.WriteLine(new string('-', 95));
-                Console.WriteLine("{0, 70}{1, 20}", "Total:", (writeTransactionCost + storageCost).ToString("C"));
+                Console.WriteLine("{0, 70}{1, 20}", "Total:", (writeTransactionsCost + storageCost + (totalReadsCostPerMonth.HasValue ? totalReadsCostPerMonth.Value : 0)).ToString("C"));
                 Console.WriteLine(new string('-', 95));
             }
             else
@@ -157,15 +165,17 @@ namespace BlobTierAnalysisTool
             Console.WriteLine("Scenario 2: Upload files to Azure Storage and keep all blobs in \"Cool\" access tier");
             if (storageCostsCoolAccessTier != null)
             {
-                writeTransactionCost = storageCostsHotAccessTier == null ? 0 : storageCostsHotAccessTier.WriteOperationsCostPerTenThousand * totalFiles / 10000;
+                writeTransactionsCost = storageCostsHotAccessTier == null ? 0 : storageCostsHotAccessTier.WriteOperationsCostPerTenThousand * totalFiles / 10000;
                 storageCost = storageCostsCoolAccessTier.DataStorageCostPerGB * totalSize / Helpers.Constants.GB;
                 dataTierChangeCost = storageCostsCoolAccessTier.WriteOperationsCostPerTenThousand * totalFiles / 10000;
+                var totalReadsCostPerMonth = CalculateReadsCost(StandardBlobTier.Cool, readTransactions, readOperations, storageCosts);
                 Console.WriteLine(new string('-', 95));
-                Console.WriteLine("{0, 70}{1, 20}", "One time cost of uploading files in Azure Storage:", writeTransactionCost.ToString("C"));
+                Console.WriteLine("{0, 70}{1, 20}", "One time cost of uploading files in Azure Storage:", writeTransactionsCost.ToString("C"));
                 Console.WriteLine("{0, 70}{1, 20}", "One time cost of changing access tier from \"Hot\" to \"Cool\":", dataTierChangeCost.ToString("C"));
-                Console.WriteLine("{0, 70}{1, 20}", "Storage costs/month:", storageCost.ToString("C"));
+                Console.WriteLine("{0, 70}{1, 20}", "Storage cost/month:", storageCost.ToString("C"));
+                Console.WriteLine("{0, 70}{1, 20}", "Blob reads cost/month:", totalReadsCostPerMonth.HasValue ? totalReadsCostPerMonth.Value.ToString("C") : "--");
                 Console.WriteLine(new string('-', 95));
-                Console.WriteLine("{0, 70}{1, 20}", "Total:", (writeTransactionCost + dataTierChangeCost + storageCost).ToString("C"));
+                Console.WriteLine("{0, 70}{1, 20}", "Total:", (writeTransactionsCost + dataTierChangeCost + storageCost + (totalReadsCostPerMonth.HasValue ? totalReadsCostPerMonth.Value : 0)).ToString("C"));
                 Console.WriteLine(new string('-', 95));
             }
             else
@@ -176,15 +186,17 @@ namespace BlobTierAnalysisTool
             Console.WriteLine("Scenario 3: Upload files to Azure Storage and keep all blobs in \"Archive\" access tier");
             if (storageCostsArchiveAccessTier != null)
             {
-                writeTransactionCost = storageCostsHotAccessTier == null ? 0 : storageCostsHotAccessTier.WriteOperationsCostPerTenThousand * totalFiles / 10000;
+                writeTransactionsCost = storageCostsHotAccessTier == null ? 0 : storageCostsHotAccessTier.WriteOperationsCostPerTenThousand * totalFiles / 10000;
                 storageCost = storageCostsArchiveAccessTier.DataStorageCostPerGB * totalSize / Helpers.Constants.GB;
                 dataTierChangeCost = storageCostsArchiveAccessTier.WriteOperationsCostPerTenThousand * totalFiles / 10000;
+                var totalReadsCostPerMonth = CalculateReadsCost(StandardBlobTier.Archive, readTransactions, readOperations, storageCosts);
                 Console.WriteLine(new string('-', 95));
-                Console.WriteLine("{0, 70}{1, 20}", "One time cost of uploading files in Azure Storage:", writeTransactionCost.ToString("C"));
+                Console.WriteLine("{0, 70}{1, 20}", "One time cost of uploading files in Azure Storage:", writeTransactionsCost.ToString("C"));
                 Console.WriteLine("{0, 70}{1, 20}", "One time cost of changing access tier from \"Hot\" to \"Archive\":", dataTierChangeCost.ToString("C"));
                 Console.WriteLine("{0, 70}{1, 20}", "Storage costs/month:", storageCost.ToString("C"));
+                Console.WriteLine("{0, 70}{1, 20}", "Blob reads cost/month:", totalReadsCostPerMonth.HasValue ? totalReadsCostPerMonth.Value.ToString("C") : "--");
                 Console.WriteLine(new string('-', 95));
-                Console.WriteLine("{0, 70}{1, 20}", "Total:", (writeTransactionCost + dataTierChangeCost + storageCost).ToString("C"));
+                Console.WriteLine("{0, 70}{1, 20}", "Total:", (writeTransactionsCost + dataTierChangeCost + storageCost + (totalReadsCostPerMonth.HasValue ? totalReadsCostPerMonth.Value : 0)).ToString("C"));
                 Console.WriteLine(new string('-', 95));
             }
             else
@@ -196,7 +208,7 @@ namespace BlobTierAnalysisTool
             Console.WriteLine();
         }
 
-        private static void AnalyzeStorageAccount(IEnumerable<string> containerNames, Models.FilterCriteria filterCriteria)
+        private static void AnalyzeStorageAccount(IEnumerable<string> containerNames, Models.FilterCriteria filterCriteria, double readPercentagePerMonth)
         {
             long totalMatchingBlobs = 0;
             long totalMatchingBlobsSize = 0;
@@ -249,7 +261,7 @@ namespace BlobTierAnalysisTool
                 Console.WriteLine(summaryText);
             }
             Console.WriteLine(new string('-', summaryText.Length));
-            DoBlobsCostAnalysis(containersStats);
+            DoBlobsCostAnalysis(containersStats, readPercentagePerMonth);
         }
 
         private static void GetHelpCommandLineArgument()
@@ -269,6 +281,7 @@ namespace BlobTierAnalysisTool
                 Console.WriteLine("/Size:<Minimum file size>. Specifies the minimum size of a blob / local file to be considered for analysis. Must be a value greater than on eqal to zero (0).");
                 Console.WriteLine("/TargetTier:<Either [H]ot, [C]ool or [A]rchive>. Specifies the target tier for cost calculations.");
                 Console.WriteLine("/Region:<Storage account region.>. Specifies the region for the storage account. Must be one of the following values: AustraliaEast, AustraliaSouthEast, BrazilSouth, CanadaCentral, CanadaEast, CentralIndia, CentralUS, EastAsia, EastUS, EastUS2, JapanEast, JapanWest, KoreaCentral, KoreaSouth, NorthCentralEurope, NorthCentralUS, SouthCentralUS, SouthIndia, SouthEastAsia, UKSouth, UKWest, WestCentralUS, WestEurope, WestUS, WestUS2");
+                Console.WriteLine("/ReadPercentagePerMonth:<blob reads percentage>. Specifies the % of blobs that will be read per month. A value of 100% would mean that each blob in the storage account will be read once per month. A value of 200% would mean that each blob in the storage account will be read twice per month.");
                 Console.WriteLine("/?. Displays the help for command line arguments.");
                 Console.WriteLine();
                 Console.WriteLine("Examples:");
@@ -408,6 +421,45 @@ namespace BlobTierAnalysisTool
                     return GetSourceTypeInput();
                 }
             }
+        }
+
+        /// <summary>
+        /// Reads the read % / month (% of blob reads / month) from command line arguments or 
+        /// via user input.
+        /// </summary>
+        /// <returns>Source type.</returns>
+        /// </summary>
+        private static double GetReadPercentagePerMonthInput()
+        {
+            var readPercentagePerMonthInput = TryParseCommandLineArgumentsToExtractValue(ReadPercentagePerMonthArgumentName);
+            double readPercentagePerMonth = 100;
+            if (!string.IsNullOrWhiteSpace(readPercentagePerMonthInput))
+            {
+                var readPercentagePerMonthValue = readPercentagePerMonthInput.Remove(0, ReadPercentagePerMonthArgumentName.Length);
+                if (double.TryParse(readPercentagePerMonthValue, out readPercentagePerMonth))
+                {
+                    if (readPercentagePerMonth >= 0) return readPercentagePerMonth;
+                }
+            }
+            Console.WriteLine();
+            Console.WriteLine(new string('*', 30));
+            Console.WriteLine("Enter a numeric value indicating % of blobs that will be read from the storage account on a monthly basis.");
+            Console.WriteLine("For example, If all blobs are read once a month, enter 100. If all blobs are read twice a month, enter 200.");
+            Console.WriteLine("For example, specifying the value 30 will exclude all blobs created or modified in the last 30 days from analysis.");
+            Console.WriteLine("Press the \"Enter\" key for default value (100%).");
+            Console.WriteLine("To exit the application, enter \"X\"");
+            Console.WriteLine(new string('*', 30));
+            Console.WriteLine();
+            var consoleInput = Console.ReadLine().Trim().ToLowerInvariant();
+            ExitApplicationIfRequired(consoleInput);
+            if (consoleInput == "") return 100;
+            consoleInput = consoleInput.Replace("%", "");
+            if (!double.TryParse(consoleInput, out readPercentagePerMonth) || readPercentagePerMonth < 0)
+            {
+                Console.WriteLine("Invalid input for read percentage / month. Enter a valid numeric value greater than or equal to zero (0).");
+                return GetReadPercentagePerMonthInput();
+            }
+            return readPercentagePerMonth;
         }
 
         /// <summary>
@@ -698,7 +750,7 @@ namespace BlobTierAnalysisTool
             return arguments.FirstOrDefault(a => a.StartsWith(argumentToSearch));
         }
 
-        private static void DoBlobsCostAnalysis(List<Models.ContainerStatistics> statistics)
+        private static void DoBlobsCostAnalysis(List<Models.ContainerStatistics> statistics, double readPercentagePerMonth)
         {
             var targetTierInput = TryParseCommandLineArgumentsToExtractValue(TargetTierArgumentName);
             if (!String.IsNullOrWhiteSpace(targetTierInput))
@@ -716,6 +768,7 @@ namespace BlobTierAnalysisTool
             var scenarioText = $"Move blobs from other access tiers to \"{targetTier.ToString()}\" access tier.";
             var storageCostTargetTier = storageCosts[targetTier];
             double currentStorageCosts = 0;
+            double currentReadsCosts = 0;
             long totalCount = 0;
             long totalSize = 0;
             double storageCostsAfterMove = 0.0;
@@ -724,7 +777,7 @@ namespace BlobTierAnalysisTool
             long totalMatchingBlobs = 0;
 
             Console.WriteLine($"Scenario: {scenarioText}");
-            var header = string.Format("{0, 12}{1, 20}{2, 20}{3, 30}", "Access Tier", "Total Blobs Count", "Total Blobs Size", "Storage Costs (Per Month)");
+            var header = string.Format("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", "Access Tier", "Total Blobs Count", "Total Blobs Size", "Storage Costs/Month", "Read Costs/Month", "Total Costs/Month");
             Console.WriteLine();
             Console.WriteLine("Current Storage Costs:");
             Console.WriteLine(new string('-', header.Length));
@@ -745,8 +798,13 @@ namespace BlobTierAnalysisTool
                         totalSizeSourceTier += matchingItem.Size;
                         currentStorageCostSourceTier += matchingItem.Size / Helpers.Constants.GB * storageCostSourceTier.DataStorageCostPerGB;
                     }
-                    Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", sourceTier.ToString(), totalCountSourceTier, Helpers.Utils.SizeAsString(totalSizeSourceTier), currentStorageCostSourceTier.ToString("C"));
+                    var readTransactions = totalCountSourceTier * readPercentagePerMonth / 100;
+                    var readOperations = totalSizeSourceTier * readPercentagePerMonth / 100;
+                    var readsCostSourceTier = CalculateReadsCost(sourceTier, readTransactions, readOperations, storageCosts);
+                    var readsPlusStorageCostSourceTier = currentStorageCostSourceTier + readsCostSourceTier.GetValueOrDefault();
+                    Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", sourceTier.ToString(), totalCountSourceTier, Helpers.Utils.SizeAsString(totalSizeSourceTier), currentStorageCostSourceTier.ToString("C"), readsCostSourceTier.HasValue ? readsCostSourceTier.Value.ToString("C") : "--", readsPlusStorageCostSourceTier.ToString("C"));
                     currentStorageCosts += currentStorageCostSourceTier;
+                    currentReadsCosts += readsCostSourceTier.GetValueOrDefault();
                     totalMatchingBlobs += totalCountSourceTier;
                     totalCount += totalCountSourceTier;
                     totalSize += totalSizeSourceTier;
@@ -756,7 +814,7 @@ namespace BlobTierAnalysisTool
                 }
                 else
                 {
-                    Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", sourceTier.ToString(), "--", "--", "--");
+                    Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", sourceTier.ToString(), "--", "--", "--", "--", "--");
                 }
             }
             long totalCountTargetTier = 0;
@@ -771,38 +829,47 @@ namespace BlobTierAnalysisTool
                     totalSizeTargetTier += matchingItem.Size;
                     currentStorageCostTargetTier += matchingItem.Size / Helpers.Constants.GB * storageCostTargetTier.DataStorageCostPerGB;
                 }
+                var readTransactions = totalCountTargetTier * readPercentagePerMonth / 100;
+                var readOperations = totalSizeTargetTier * readPercentagePerMonth / 100;
+                var readsCostTargetTier = CalculateReadsCost(targetTier, readTransactions, readOperations, storageCosts);
+                var readsPlusStorageCostTargetTier = currentStorageCostTargetTier + readsCostTargetTier.GetValueOrDefault();
                 currentStorageCosts += currentStorageCostTargetTier;
+                currentReadsCosts += readsCostTargetTier.GetValueOrDefault();
                 totalCount += totalCountTargetTier;
                 totalSize += totalSizeTargetTier;
-                Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", targetTier.ToString(), totalCountTargetTier, Helpers.Utils.SizeAsString(totalSizeTargetTier), currentStorageCostTargetTier.ToString("C"));
+                Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", targetTier.ToString(), totalCountTargetTier, Helpers.Utils.SizeAsString(totalSizeTargetTier), currentStorageCostTargetTier.ToString("C"), readsCostTargetTier.HasValue ? readsCostTargetTier.Value.ToString("C") : "--", readsPlusStorageCostTargetTier.ToString("C"));
             }
             else
             {
-                Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", targetTier.ToString(), "--", "--", "--");
+                Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 30}{4, 20}{5, 20}", targetTier.ToString(), "--", "--", "--", "--", "--");
             }
             Console.WriteLine(new string('-', header.Length));
-            Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", "Total", totalCount, Helpers.Utils.SizeAsString(totalSize), currentStorageCosts.ToString("C"));
+            Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", "Total", totalCount, Helpers.Utils.SizeAsString(totalSize), currentStorageCosts.ToString("C"), currentReadsCosts.ToString("C"), (currentStorageCosts + currentReadsCosts).ToString("C"));
             Console.WriteLine(new string('-', header.Length));
             Console.WriteLine();
             Console.WriteLine("*All currency values are rounded to the nearest cent and are in US Dollars ($).");
             Console.WriteLine();
             if (storageCostTargetTier != null)
             {
+                var readTransactions = totalCount * readPercentagePerMonth / 100;
+                var readOperations = totalSize * readPercentagePerMonth / 100;
+                var readsCostAfterMigration = CalculateReadsCost(targetTier, readTransactions, readOperations, storageCosts);
+                var totalCostAfterMigration = storageCostsAfterMove + readsCostAfterMigration.GetValueOrDefault();
                 Console.WriteLine("Storage Costs After Migration:");
                 Console.WriteLine(new string('-', header.Length));
                 Console.WriteLine(header);
                 Console.WriteLine(new string('-', header.Length));
                 foreach (var sourceTier in sourceTiers)
                 {
-                    Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", sourceTier.ToString(), 0, Helpers.Utils.SizeAsString(0), 0.ToString("C"));
+                    Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", sourceTier.ToString(), 0, Helpers.Utils.SizeAsString(0), 0.ToString("C"), 0.ToString("C"), 0.ToString("C"));
                 }
-                Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", targetTier.ToString(), totalCount, Helpers.Utils.SizeAsString(totalSize), storageCostsAfterMove.ToString("C"));
+                Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", targetTier.ToString(), totalCount, Helpers.Utils.SizeAsString(totalSize), storageCostsAfterMove.ToString("C"), readsCostAfterMigration.HasValue ? readsCostAfterMigration.Value.ToString("C") : "--", totalCostAfterMigration.ToString("C"));
                 Console.WriteLine(new string('-', header.Length));
-                Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", "Total", totalCount, Helpers.Utils.SizeAsString(totalSize), storageCostsAfterMove.ToString("C"));
-                Console.WriteLine("{0, 12}{1,20}{2, 20}{3, 30}", "Savings", "--", "--", (currentStorageCosts - storageCostsAfterMove).ToString("C"));
+                Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", "Total", totalCount, Helpers.Utils.SizeAsString(totalSize), storageCostsAfterMove.ToString("C"), readsCostAfterMigration.HasValue ? readsCostAfterMigration.Value.ToString("C") : "--", totalCostAfterMigration.ToString("C"));
+                Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", "Savings", "--", "--", (currentStorageCosts - storageCostsAfterMove).ToString("C"), (currentReadsCosts - readsCostAfterMigration.GetValueOrDefault()).ToString("C"), (currentStorageCosts + currentReadsCosts - storageCostsAfterMove - readsCostAfterMigration.GetValueOrDefault()).ToString("C"));
                 Console.WriteLine(new string('-', header.Length));
-                Console.WriteLine("{0, 62}{1,20}", "One time cost of data retrieval and changing blob access tier:", (dataTierChangeCost + dataRetrievalCost).ToString("C"));
-                Console.WriteLine("{0, 62}{1,20}", "Net Savings:", (currentStorageCosts - storageCostsAfterMove + dataTierChangeCost + dataRetrievalCost).ToString("C"));
+                Console.WriteLine("{0, 62}{1, 20}", "One time cost of data retrieval and changing blob access tier:", (dataTierChangeCost + dataRetrievalCost).ToString("C"));
+                Console.WriteLine("{0, 62}{1, 20}", "Net Savings:", (currentStorageCosts + currentReadsCosts - totalCostAfterMigration + dataTierChangeCost + dataRetrievalCost).ToString("C"));
                 Console.WriteLine(new string('-', header.Length));
                 Console.WriteLine();
                 Console.WriteLine("*All currency values are rounded to the nearest cent and are in US Dollars ($).");
@@ -858,6 +925,62 @@ namespace BlobTierAnalysisTool
                 Console.ReadKey();
                 ExitApplicationIfRequired("X");
             }
+        }
+
+        private static double? CalculateReadsCost(StandardBlobTier sourceTier, double readTransactions, double readOperations, Dictionary<StandardBlobTier, Models.StorageCosts> costs)
+        {
+            double? readCostsPerMonth = null;
+            var storageCostsHotAccessTier = costs[StandardBlobTier.Hot];
+            var storageCostsCoolAccessTier = costs[StandardBlobTier.Cool];
+            var storageCostsArchiveAccessTier = costs[StandardBlobTier.Archive];
+            switch (sourceTier)
+            {
+                case StandardBlobTier.Hot:
+                {
+                    if (storageCostsHotAccessTier != null)
+                    {
+                        readCostsPerMonth = storageCostsHotAccessTier.ReadOperationsCostPerTenThousand * readTransactions / 10000;
+                    }
+                    break;
+                }
+                case StandardBlobTier.Cool:
+                {
+                    if (storageCostsCoolAccessTier != null)
+                    {
+                        //For calculation of read costs in "Cool" access tier, this is the formula used:
+                        //1. First read blobs from cool tier (data retrieval cost) = Size of blobs read (in GB) x data retrieval cost (per GB).
+                        //2. Convert the blob tier to hot = # of blobs read x data tier change cost (cool) / 10000;
+                        //3. Blobs read cost from hot tier = # of blobs read x read transaction cost (hot tier) / 10000.
+                        //4. Convert the blob tier back to cool = # of blobs read x data tier change cost (hot) / 10000.
+                        //Blobs read cost = 1 + 2 + 3 + 4.
+                        var dataRetrievalCostCoolTier = storageCostsCoolAccessTier.DataRetrievalCostPerGB * readOperations / Helpers.Constants.GB;
+                        var dataTierChangeFromCoolToHotCost = storageCostsCoolAccessTier.ReadOperationsCostPerTenThousand * readTransactions / 10000;
+                        var dataReadTransactionsHotTierCost = storageCostsHotAccessTier == null ? 0 : storageCostsHotAccessTier.ReadOperationsCostPerTenThousand * readTransactions / 10000;
+                        var dataTierChangeFromHotToCoolCost = storageCostsCoolAccessTier.WriteOperationsCostPerTenThousand * readTransactions / 10000;
+                        readCostsPerMonth = dataRetrievalCostCoolTier + dataTierChangeFromCoolToHotCost + dataReadTransactionsHotTierCost + dataTierChangeFromHotToCoolCost;
+                    }
+                    break;
+                }
+                case StandardBlobTier.Archive:
+                {
+                    if (storageCostsArchiveAccessTier != null)
+                    {
+                        //For calculation of read costs in "Archive" access tier, this is the formula used:
+                        //1. First read blobs from archive tier (data retrieval cost) = Size of blobs read (in GB) x data retrieval cost (per GB).
+                        //2. Convert the blob tier to hot = # of blobs read x data tier change cost (archive) / 10000;
+                        //3. Blobs read cost from hot tier = # of blobs read x read transaction cost (hot tier) / 10000.
+                        //4. Convert the blob tier back to archive = # of blobs read x data tier change cost (archive) / 10000.
+                        //Blobs read cost = 1 + 2 + 3 + 4.
+                        var dataRetrievalCostArchiveTier = storageCostsArchiveAccessTier.DataRetrievalCostPerGB * readOperations / Helpers.Constants.GB;
+                        var dataTierChangeFromArchiveToHotCost = storageCostsArchiveAccessTier.ReadOperationsCostPerTenThousand * readTransactions / 10000;
+                        var dataReadTransactionsHotTierCost = storageCostsHotAccessTier == null ? 0 : storageCostsHotAccessTier.ReadOperationsCostPerTenThousand * readTransactions / 10000;
+                        var dataTierChangeFromHotToArchiveCost = storageCostsArchiveAccessTier.WriteOperationsCostPerTenThousand * readTransactions / 10000;
+                        readCostsPerMonth = dataRetrievalCostArchiveTier + dataTierChangeFromArchiveToHotCost + dataReadTransactionsHotTierCost + dataTierChangeFromHotToArchiveCost;
+                    }
+                    break;
+                }
+            }
+            return readCostsPerMonth;
         }
     }
 }
