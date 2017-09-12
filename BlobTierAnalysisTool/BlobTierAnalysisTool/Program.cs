@@ -67,7 +67,7 @@ namespace BlobTierAnalysisTool
                 var containerToSearch = GetContainerInput();
                 if (containerToSearch == "*")
                 {
-                    Console.WriteLine($"Listing blob containers in \"{Helpers.BlobStorageHelper.StorageAccount.Credentials.AccountName}\" storage account...");
+                    Console.WriteLine($"Listing blob containers in storage account...");
                     sourcesToScan = Helpers.BlobStorageHelper.ListContainers().GetAwaiter().GetResult();
                 }
                 else
@@ -205,6 +205,7 @@ namespace BlobTierAnalysisTool
             }
             Console.WriteLine();
             Console.WriteLine("*All currency values are rounded to the nearest cent and are in US Dollars ($).");
+            Console.WriteLine("*Read costs does not include data egress costs.");
             Console.WriteLine();
         }
 
@@ -275,7 +276,7 @@ namespace BlobTierAnalysisTool
                 Console.WriteLine("BlobTierAnalysisTool </SourceType:> </ConnectionString:> </Source:> </Days:> </Size:> </TargetTier:> </Region:>");
                 Console.WriteLine();
                 Console.WriteLine("/SourceType:<Either [L]ocal or [C]loud>. Specifies the type of source you want to analyze.");
-                Console.WriteLine("/ConnectionString:<Storage account connection string>. Specifies storage account connection string.");
+                Console.WriteLine("/ConnectionString:<Storage account connection string or Account Shared Access Signature (SAS) URL>. Specifies storage account connection string or an Account Shared Access Signature.");
                 Console.WriteLine("/Source:<Analysis source>. Specifies analysis source. For \"Local\" source type, it should be the folder path and for \"Cloud\" source type, it could either be the name of a blob container or \"*\" for all blob containers.");
                 Console.WriteLine("/Days:<Last modified time in days>. Specifies the minimum last modified time (in days before the present time) of a blob / local file to be considered for analysis. Must be a value greater than on equal to zero (0).");
                 Console.WriteLine("/Size:<Minimum file size>. Specifies the minimum size of a blob / local file to be considered for analysis. Must be a value greater than on eqal to zero (0).");
@@ -522,6 +523,7 @@ namespace BlobTierAnalysisTool
             {
                 Console.WriteLine(new string('*', 30));
                 Console.WriteLine("Enter connection string for your storage account in the following format: DefaultEndpointsProtocol=https;AccountName=<youraccountname>;AccountKey=<youraccountkey>");
+                Console.WriteLine("You can also enter an Account Shared Access Signature (SAS) URL");
                 Console.WriteLine("To exit the application, enter \"X\"");
                 Console.WriteLine(new string('*', 30));
                 connectionString = Console.ReadLine();
@@ -848,6 +850,7 @@ namespace BlobTierAnalysisTool
             Console.WriteLine(new string('-', header.Length));
             Console.WriteLine();
             Console.WriteLine("*All currency values are rounded to the nearest cent and are in US Dollars ($).");
+            Console.WriteLine("*Read costs does not include data egress costs.");
             Console.WriteLine();
             if (storageCostTargetTier != null)
             {
@@ -873,6 +876,7 @@ namespace BlobTierAnalysisTool
                 Console.WriteLine(new string('-', header.Length));
                 Console.WriteLine();
                 Console.WriteLine("*All currency values are rounded to the nearest cent and are in US Dollars ($).");
+                Console.WriteLine("*Read costs does not include data egress costs.");
                 Console.WriteLine();
                 Console.WriteLine($"To change the access tier of the blobs to \"{targetTier.ToString()}\", enter \"Y\" now. Enter any other key to terminate the application.");
                 Console.WriteLine("*Please be aware of the the one-time costs you will incur for changing the access tiers.");
@@ -947,17 +951,7 @@ namespace BlobTierAnalysisTool
                 {
                     if (storageCostsCoolAccessTier != null)
                     {
-                        //For calculation of read costs in "Cool" access tier, this is the formula used:
-                        //1. First read blobs from cool tier (data retrieval cost) = Size of blobs read (in GB) x data retrieval cost (per GB).
-                        //2. Convert the blob tier to hot = # of blobs read x data tier change cost (cool) / 10000;
-                        //3. Blobs read cost from hot tier = # of blobs read x read transaction cost (hot tier) / 10000.
-                        //4. Convert the blob tier back to cool = # of blobs read x data tier change cost (hot) / 10000.
-                        //Blobs read cost = 1 + 2 + 3 + 4.
-                        var dataRetrievalCostCoolTier = storageCostsCoolAccessTier.DataRetrievalCostPerGB * readOperations / Helpers.Constants.GB;
-                        var dataTierChangeFromCoolToHotCost = storageCostsCoolAccessTier.ReadOperationsCostPerTenThousand * readTransactions / 10000;
-                        var dataReadTransactionsHotTierCost = storageCostsHotAccessTier == null ? 0 : storageCostsHotAccessTier.ReadOperationsCostPerTenThousand * readTransactions / 10000;
-                        var dataTierChangeFromHotToCoolCost = storageCostsCoolAccessTier.WriteOperationsCostPerTenThousand * readTransactions / 10000;
-                        readCostsPerMonth = dataRetrievalCostCoolTier + dataTierChangeFromCoolToHotCost + dataReadTransactionsHotTierCost + dataTierChangeFromHotToCoolCost;
+                        readCostsPerMonth = storageCostsCoolAccessTier.ReadOperationsCostPerTenThousand * readTransactions / 10000;
                     }
                     break;
                 }

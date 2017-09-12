@@ -13,7 +13,7 @@ namespace BlobTierAnalysisTool.Helpers
 {
     public static class BlobStorageHelper
     {
-        private static CloudStorageAccount _storageAccount;
+        private static CloudBlobClient _blobClient;
 
         /// <summary>
         /// Tries to parse a connection string and sets the storage account.
@@ -24,7 +24,25 @@ namespace BlobTierAnalysisTool.Helpers
         {
             try
             {
-                return CloudStorageAccount.TryParse(connectionString, out _storageAccount);
+                Uri sasUri = null;
+                if (Uri.TryCreate(connectionString, UriKind.Absolute, out sasUri))
+                {
+                    var sasToken = sasUri.Query;
+                    var baseUrl = sasUri.AbsoluteUri.Replace(sasToken, "");
+                    _blobClient = new CloudBlobClient(new Uri(baseUrl), new StorageCredentials(sasToken));
+                    return true;
+                }
+                else
+                {
+                    CloudStorageAccount _storageAccount;
+                    if (CloudStorageAccount.TryParse(connectionString, out _storageAccount))
+                    {
+                        _blobClient = _storageAccount.CreateCloudBlobClient();
+                        return true;
+                    }
+
+                }
+                return false;
             }
             catch (Exception)
             {
@@ -41,7 +59,7 @@ namespace BlobTierAnalysisTool.Helpers
         {
             try
             {
-                return await StorageAccount.CreateCloudBlobClient().GetContainerReference(containerName).ExistsAsync();
+                return await _blobClient.GetContainerReference(containerName).ExistsAsync();
             }
             catch (Exception exception)
             {
@@ -56,11 +74,10 @@ namespace BlobTierAnalysisTool.Helpers
         public static async Task<IEnumerable<string>> ListContainers()
         {
             List<string> containers = new List<string>();
-            var blobClient = StorageAccount.CreateCloudBlobClient();
             BlobContinuationToken token = null;
             do
             {
-                var result = await blobClient.ListContainersSegmentedAsync(token);
+                var result = await _blobClient.ListContainersSegmentedAsync(token);
                 token = result.ContinuationToken;
                 var blobContainers = result.Results.Select(blobContainer => blobContainer.Name); ;
                 containers.AddRange(blobContainers);
@@ -82,7 +99,7 @@ namespace BlobTierAnalysisTool.Helpers
         /// </returns>
         public static async Task<Models.ContainerStatistics> AnalyzeContainer(string containerName, Models.FilterCriteria filterCriteria)
         {
-            var blobContainer = StorageAccount.CreateCloudBlobClient().GetContainerReference(containerName);
+            var blobContainer = _blobClient.GetContainerReference(containerName);
             var containerStats = new Models.ContainerStatistics(containerName);
             BlobContinuationToken token = null;
             try
@@ -164,7 +181,7 @@ namespace BlobTierAnalysisTool.Helpers
         {
             try
             {
-                CloudBlockBlob blob = StorageAccount.CreateCloudBlobClient().GetContainerReference(containerName).GetBlockBlobReference(blobName);
+                CloudBlockBlob blob = _blobClient.GetContainerReference(containerName).GetBlockBlobReference(blobName);
                 await blob.SetStandardBlobTierAsync(targetTier);
                 return true;
             }
@@ -174,15 +191,11 @@ namespace BlobTierAnalysisTool.Helpers
             }
         }
 
-        /// <summary>
-        /// Gets the <see cref="CloudStorageAccount"/>.
-        /// </summary>
-        public static CloudStorageAccount StorageAccount
+        public static string StorageAccountName
         {
             get
             {
-                if (_storageAccount == null) throw new ArgumentNullException("StorageAccount", "Storage account parameter cannot be null");
-                return _storageAccount;
+                return _blobClient.Credentials.AccountName;
             }
         }
 
