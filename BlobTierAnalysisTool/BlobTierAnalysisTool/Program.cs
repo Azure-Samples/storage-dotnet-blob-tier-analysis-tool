@@ -205,7 +205,7 @@ namespace BlobTierAnalysisTool
             }
             Console.WriteLine();
             Console.WriteLine("*All currency values are rounded to the nearest cent and are in US Dollars ($).");
-            Console.WriteLine("*Read costs does not include data egress costs.");
+            Console.WriteLine("*Read costs do not include data egress charges, as these will only be assessed when data is read outside of the Azure region.");
             Console.WriteLine();
         }
 
@@ -446,7 +446,6 @@ namespace BlobTierAnalysisTool
             Console.WriteLine(new string('*', 30));
             Console.WriteLine("Enter a numeric value indicating % of blobs that will be read from the storage account on a monthly basis.");
             Console.WriteLine("For example, If all blobs are read once a month, enter 100. If all blobs are read twice a month, enter 200.");
-            Console.WriteLine("For example, specifying the value 30 will exclude all blobs created or modified in the last 30 days from analysis.");
             Console.WriteLine("Press the \"Enter\" key for default value (100%).");
             Console.WriteLine("To exit the application, enter \"X\"");
             Console.WriteLine(new string('*', 30));
@@ -850,7 +849,7 @@ namespace BlobTierAnalysisTool
             Console.WriteLine(new string('-', header.Length));
             Console.WriteLine();
             Console.WriteLine("*All currency values are rounded to the nearest cent and are in US Dollars ($).");
-            Console.WriteLine("*Read costs does not include data egress costs.");
+            Console.WriteLine("*Read costs do not include data egress charges, as these will only be assessed when data is read outside of the Azure region.");
             Console.WriteLine();
             if (storageCostTargetTier != null)
             {
