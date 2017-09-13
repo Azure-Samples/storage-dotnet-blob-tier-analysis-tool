@@ -206,6 +206,7 @@ namespace BlobTierAnalysisTool
             Console.WriteLine();
             Console.WriteLine("*All currency values are rounded to the nearest cent and are in US Dollars ($).");
             Console.WriteLine("*Read costs do not include data egress charges, as these will only be assessed when data is read outside of the Azure region.");
+            Console.WriteLine("*Storage costs does not include charge for metadata storage.");
             Console.WriteLine();
         }
 
@@ -809,8 +810,19 @@ namespace BlobTierAnalysisTool
                     totalMatchingBlobs += totalCountSourceTier;
                     totalCount += totalCountSourceTier;
                     totalSize += totalSizeSourceTier;
-                    dataTierChangeCost += totalCountSourceTier * storageCostSourceTier.WriteOperationsCostPerTenThousand / 10000;
-                    dataRetrievalCost += totalSizeSourceTier / Helpers.Constants.GB * storageCostSourceTier.DataRetrievalCostPerGB;
+                    if ((sourceTier == StandardBlobTier.Hot && targetTier == StandardBlobTier.Cool) || (sourceTier == StandardBlobTier.Hot && targetTier == StandardBlobTier.Archive) || (sourceTier == StandardBlobTier.Cool && targetTier == StandardBlobTier.Archive))
+                    {
+                        if (storageCostTargetTier != null)
+                        {
+                            dataTierChangeCost += totalCountSourceTier * storageCostTargetTier.WriteOperationsCostPerTenThousand / 10000;
+                            dataRetrievalCost += totalSizeSourceTier / Helpers.Constants.GB * storageCostTargetTier.DataWriteCostPerGB;
+                        }
+                    }
+                    if ((sourceTier == StandardBlobTier.Archive && targetTier == StandardBlobTier.Hot) || (sourceTier == StandardBlobTier.Archive && targetTier == StandardBlobTier.Cool) || (sourceTier == StandardBlobTier.Cool && targetTier == StandardBlobTier.Hot))
+                    {
+                        dataTierChangeCost += totalCountSourceTier * storageCostSourceTier.ReadOperationsCostPerTenThousand / 10000;
+                        dataRetrievalCost += totalSizeSourceTier / Helpers.Constants.GB * storageCostTargetTier.DataRetrievalCostPerGB;
+                    }
                     storageCostsAfterMove += totalSizeSourceTier / Helpers.Constants.GB * (storageCostTargetTier == null ? 0 : storageCostTargetTier.DataStorageCostPerGB);
                 }
                 else
@@ -850,6 +862,7 @@ namespace BlobTierAnalysisTool
             Console.WriteLine();
             Console.WriteLine("*All currency values are rounded to the nearest cent and are in US Dollars ($).");
             Console.WriteLine("*Read costs do not include data egress charges, as these will only be assessed when data is read outside of the Azure region.");
+            Console.WriteLine("*Storage costs does not include charge for metadata storage.");
             Console.WriteLine();
             if (storageCostTargetTier != null)
             {
@@ -876,6 +889,7 @@ namespace BlobTierAnalysisTool
                 Console.WriteLine();
                 Console.WriteLine("*All currency values are rounded to the nearest cent and are in US Dollars ($).");
                 Console.WriteLine("*Read costs does not include data egress costs.");
+                Console.WriteLine("*Storage costs does not include charge for metadata storage.");
                 Console.WriteLine();
                 Console.WriteLine($"To change the access tier of the blobs to \"{targetTier.ToString()}\", enter \"Y\" now. Enter any other key to terminate the application.");
                 Console.WriteLine("*Please be aware of the the one-time costs you will incur for changing the access tiers.");
@@ -942,7 +956,8 @@ namespace BlobTierAnalysisTool
                 {
                     if (storageCostsHotAccessTier != null)
                     {
-                        readCostsPerMonth = storageCostsHotAccessTier.ReadOperationsCostPerTenThousand * readTransactions / 10000;
+                        readCostsPerMonth = storageCostsHotAccessTier.ReadOperationsCostPerTenThousand * readTransactions / 10000 +
+                                storageCostsHotAccessTier.DataRetrievalCostPerGB * readOperations / Helpers.Constants.GB; ;
                     }
                     break;
                 }
@@ -950,7 +965,8 @@ namespace BlobTierAnalysisTool
                 {
                     if (storageCostsCoolAccessTier != null)
                     {
-                        readCostsPerMonth = storageCostsCoolAccessTier.ReadOperationsCostPerTenThousand * readTransactions / 10000;
+                        readCostsPerMonth = storageCostsCoolAccessTier.ReadOperationsCostPerTenThousand * readTransactions / 10000 +
+                                storageCostsCoolAccessTier.DataRetrievalCostPerGB * readOperations / Helpers.Constants.GB;
                     }
                     break;
                 }
