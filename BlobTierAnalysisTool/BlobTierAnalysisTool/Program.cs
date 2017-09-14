@@ -144,6 +144,7 @@ namespace BlobTierAnalysisTool
             Console.WriteLine(new string('-', text.Length));
             Console.WriteLine();
             Console.WriteLine("Cost Estimator");
+            Console.WriteLine();
             Console.WriteLine("Scenario 1: Upload files to Azure Storage and keep all blobs in \"Hot\" access tier");
             var storageCostsHotAccessTier = storageCosts[StandardBlobTier.Hot];
             var storageCostsCoolAccessTier = storageCosts[StandardBlobTier.Cool];
@@ -216,7 +217,9 @@ namespace BlobTierAnalysisTool
             }
             Console.WriteLine();
             Console.WriteLine("*All currency values are rounded to the nearest cent and are in US Dollars ($).");
+            Console.WriteLine();
             Console.WriteLine("*Read costs do not include data egress charges, as these will only be assessed when data is read outside of the Azure region.");
+            Console.WriteLine();
             Console.WriteLine("*Storage costs does not include charge for metadata storage.");
             Console.WriteLine();
         }
@@ -343,8 +346,10 @@ namespace BlobTierAnalysisTool
             else
             {
                 Console.WriteLine(new string('*', 80));
-                Console.WriteLine("Please specify the region for your storage account. Valid values are:");
-                Console.WriteLine("AustraliaEast, AustraliaSouthEast, BrazilSouth, CanadaCentral, CanadaEast, CentralIndia, CentralUS, EastAsia, EastUS, EastUS2, JapanEast, JapanWest, KoreaCentral, KoreaSouth, NorthCentralEurope, NorthCentralUS, SouthCentralUS, SouthIndia, SouthEastAsia, UKSouth, UKWest, WestCentralUS, WestEurope, WestUS, WestUS2");
+                Console.WriteLine("Please specify the region for your storage account.");
+                Console.WriteLine("If you are using this tool to analyze cost of uploading local files to Azure Storage, this is the region of the targest account.");
+                Console.WriteLine("If you are using this tool to analyze cost of tiering files already in Azure Storage, this is the region of your source account.");
+                Console.WriteLine("Valid values are: AustraliaEast, AustraliaSouthEast, BrazilSouth, CanadaCentral, CanadaEast, CentralIndia, CentralUS, EastAsia, EastUS, EastUS2, JapanEast, JapanWest, KoreaCentral, KoreaSouth, NorthCentralEurope, NorthCentralUS, SouthCentralUS, SouthIndia, SouthEastAsia, UKSouth, UKWest, WestCentralUS, WestEurope, WestUS, WestUS2");
                 Console.WriteLine("Press \"Enter\" key for default region (US East 2) or \"X\" to terminate the application.");
                 Console.WriteLine(new string('*', 80));
                 region = Console.ReadLine();
