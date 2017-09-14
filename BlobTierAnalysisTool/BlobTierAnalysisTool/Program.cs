@@ -20,10 +20,13 @@ namespace BlobTierAnalysisTool
         private const string SizeArgumentName = "/Size:";
         private const string TargetTierArgumentName = "/TargetTier:";
         private const string ReadPercentagePerMonthArgumentName = "/ReadPercentagePerMonth:";
+        private const string ShowContainerLevelStatisticsArgumentName = "/ShowContainerLevelStatistics:";
 
         private static Dictionary<StandardBlobTier, Models.StorageCosts> storageCosts = null;
         private static IEnumerable<string> sourcesToScan = null;
         private static Models.FilterCriteria filterCriteria = null;
+        private static bool showContainerLevelStatistics = false;
+
         static void Main(string[] args)
         {
             Console.WriteLine(new string('*', 80));
@@ -53,7 +56,7 @@ namespace BlobTierAnalysisTool
             //    { StandardBlobTier.Cool, new Models.StorageCosts(0.01, 0.10, 0.01, 0.01, 0.0025) },
             //    { StandardBlobTier.Archive, new Models.StorageCosts(0.0018, 0.30, 0.15, 0.0015, 0) }
             //};
-
+            showContainerLevelStatistics = GetShowContainerLevelStatistics();
             storageCosts = GetStorageCostsBasedOnStorageRegionInput();
             var sourceType = GetSourceTypeInput();
             if (sourceType == "L")
@@ -68,6 +71,11 @@ namespace BlobTierAnalysisTool
             {
                 var connectionString = GetConnectionStringInput();
                 var containerToSearch = GetContainerInput();
+                if (!Helpers.BlobStorageHelper.ValidateConnection(containerToSearch).GetAwaiter().GetResult())
+                {
+                    Console.WriteLine("Unable to connect to storage account using the connection string provided. Please check the connection string and try again.");
+                    ExitApplicationIfRequired("X");
+                }
                 if (containerToSearch == "*")
                 {
                     Console.WriteLine($"Listing blob containers in storage account...");
@@ -225,9 +233,12 @@ namespace BlobTierAnalysisTool
                 var containerStats = Helpers.BlobStorageHelper.AnalyzeContainer(containerName, filterCriteria).GetAwaiter().GetResult();
                 containersStats.Add(containerStats);
                 var text = string.Format("{0, 12}{1, 40}{2, 40}", "Access Tier", "Total Blobs Count/Size", "Matching Blobs Count/Size");
-                Console.WriteLine(new string('-', text.Length));
-                Console.WriteLine(text);
-                Console.WriteLine(new string('-', text.Length));
+                if (showContainerLevelStatistics)
+                {
+                    Console.WriteLine(new string('-', text.Length));
+                    Console.WriteLine(text);
+                    Console.WriteLine(new string('-', text.Length));
+                }
                 foreach (var key in containerStats.BlobsStatistics.Keys)
                 {
                     var label = key.ToString();
@@ -242,12 +253,18 @@ namespace BlobTierAnalysisTool
                     matchingSummaryStatistics.BlobNames.AddRange(matchingBlobStatistics.BlobNames);
                     totalMatchingBlobs += matchingBlobStatistics.Count;
                     totalMatchingBlobsSize += matchingBlobStatistics.Size;
-                    var blobsSizeCountString = $"{blobStatistics.Count}/{Helpers.Utils.SizeAsString(blobStatistics.Size)} ({blobStatistics.Size} bytes)";
-                    var matchingBlobsSizeCountString = $"{matchingBlobStatistics.Count}/{Helpers.Utils.SizeAsString(matchingBlobStatistics.Size)} ({matchingBlobStatistics.Size} bytes)";
-                    text = string.Format("{0, 12}{1, 40}{2, 40}", label, blobsSizeCountString, matchingBlobsSizeCountString);
-                    Console.WriteLine(text);
+                    if (showContainerLevelStatistics)
+                    {
+                        var blobsSizeCountString = $"{blobStatistics.Count}/{Helpers.Utils.SizeAsString(blobStatistics.Size)} ({blobStatistics.Size} bytes)";
+                        var matchingBlobsSizeCountString = $"{matchingBlobStatistics.Count}/{Helpers.Utils.SizeAsString(matchingBlobStatistics.Size)} ({matchingBlobStatistics.Size} bytes)";
+                        text = string.Format("{0, 12}{1, 40}{2, 40}", label, blobsSizeCountString, matchingBlobsSizeCountString);
+                        Console.WriteLine(text);
+                    }
                 }
-                Console.WriteLine(new string('-', text.Length));
+                if (showContainerLevelStatistics)
+                {
+                    Console.WriteLine(new string('-', text.Length));
+                }
             }
             Console.WriteLine();
             Console.WriteLine("Summary for all containers");
@@ -287,6 +304,7 @@ namespace BlobTierAnalysisTool
                 Console.WriteLine("/TargetTier:<Either [H]ot, [C]ool or [A]rchive>. Specifies the target tier for cost calculations.");
                 Console.WriteLine("/Region:<Storage account region.>. Specifies the region for the storage account. Must be one of the following values: AustraliaEast, AustraliaSouthEast, BrazilSouth, CanadaCentral, CanadaEast, CentralIndia, CentralUS, EastAsia, EastUS, EastUS2, JapanEast, JapanWest, KoreaCentral, KoreaSouth, NorthCentralEurope, NorthCentralUS, SouthCentralUS, SouthIndia, SouthEastAsia, UKSouth, UKWest, WestCentralUS, WestEurope, WestUS, WestUS2");
                 Console.WriteLine("/ReadPercentagePerMonth:<blob reads percentage>. Specifies the % of blobs that will be read per month. A value of 100% would mean that each blob in the storage account will be read once per month. A value of 200% would mean that each blob in the storage account will be read twice per month.");
+                Console.WriteLine("/ShowContainerLevelStatistics:<true or false>. Indicates if container level statistics must be shown on console output.");
                 Console.WriteLine("/?. Displays the help for command line arguments.");
                 Console.WriteLine();
                 Console.WriteLine("Examples:");
@@ -567,7 +585,7 @@ namespace BlobTierAnalysisTool
                     Console.WriteLine($"Checking if \"{containerName}\" blob container exists in the storage account...");
                     if (!Helpers.BlobStorageHelper.DoesContainerExists(containerName).GetAwaiter().GetResult())
                     {
-                        Console.WriteLine("Specified blob container does not exist. Please modify the command line arguments and try again. Terminating application.");
+                        Console.WriteLine("Either the specified blob container does not exist in the storage account or the connection string specified is invalid. Please modify the command line arguments and try again. Terminating application.");
                         Console.WriteLine("Press any key to terminate the application");
                         Console.ReadKey();
                         ExitApplicationIfRequired("X");
@@ -597,8 +615,10 @@ namespace BlobTierAnalysisTool
                         Console.WriteLine($"Checking if \"{containerName}\" blob container exists in the storage account...");
                         if (!Helpers.BlobStorageHelper.DoesContainerExists(containerName).GetAwaiter().GetResult())
                         {
-                            Console.WriteLine("Specified blob container does not exist. Please try again.");
-                            return GetContainerInput();
+                            Console.WriteLine("Either the specified blob container does not exist in the storage account or the connection string specified is invalid. Please check the value and try again. Terminating application.");
+                            Console.WriteLine("Press any key to terminate the application");
+                            Console.ReadKey();
+                            ExitApplicationIfRequired("X");
                         }
                     }
                     return containerName;
@@ -724,6 +744,22 @@ namespace BlobTierAnalysisTool
                     return GetTargetBlobTierInput("");
             }
             return targetTier;
+        }
+
+        /// <summary>
+        /// Reads the flag indicating if container level statistics should be shown via command line arguments.
+        /// </summary>
+        /// <returns></returns>
+        private static bool GetShowContainerLevelStatistics()
+        {
+            bool showStatistics = false;
+            var showContainerLevelStatisticsArgument = TryParseCommandLineArgumentsToExtractValue(ShowContainerLevelStatisticsArgumentName);
+            if (!string.IsNullOrWhiteSpace(showContainerLevelStatisticsArgument))
+            {
+                var showContainerLevelStatisticsArgumentValue = showContainerLevelStatisticsArgument.Remove(0, ShowContainerLevelStatisticsArgumentName.Length);
+                bool.TryParse(showContainerLevelStatisticsArgumentValue, out showStatistics);
+            }
+            return showStatistics;
         }
 
         /// <summary>
@@ -883,7 +919,8 @@ namespace BlobTierAnalysisTool
                 Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", "Savings", "--", "--", (currentStorageCosts - storageCostsAfterMove).ToString("C"), (currentReadsCosts - readsCostAfterMigration.GetValueOrDefault()).ToString("C"), (currentStorageCosts + currentReadsCosts - storageCostsAfterMove - readsCostAfterMigration.GetValueOrDefault()).ToString("C"));
                 Console.WriteLine(new string('-', header.Length));
                 Console.WriteLine("{0, 62}{1, 20}", "One time cost of data retrieval and changing blob access tier:", (dataTierChangeCost + dataRetrievalCost).ToString("C"));
-                Console.WriteLine("{0, 62}{1, 20}", "Net Savings:", (currentStorageCosts + currentReadsCosts - totalCostAfterMigration + dataTierChangeCost + dataRetrievalCost).ToString("C"));
+                var costSavings = currentStorageCosts + currentReadsCosts - totalCostAfterMigration + dataTierChangeCost + dataRetrievalCost;
+                Console.WriteLine("{0, 62}{1, 20}", costSavings >= 0 ? "Net Savings:" : "Cost Increase:", Math.Abs(costSavings).ToString("C"));
                 Console.WriteLine(new string('-', header.Length));
                 Console.WriteLine();
                 Console.WriteLine("*All currency values are rounded to the nearest cent and are in US Dollars ($).");

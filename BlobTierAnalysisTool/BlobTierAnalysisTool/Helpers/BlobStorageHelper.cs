@@ -68,6 +68,39 @@ namespace BlobTierAnalysisTool.Helpers
         }
 
         /// <summary>
+        /// Validates the connection to the storage account. This method will try to perform list containers
+        /// operation (fetching just one container) if <paramref name="containerName"/> parameter is not defined
+        /// otherwise it will try to perform list blobs operation (fetching just one blob). The objective of this
+        /// method is to capture 403 error.
+        /// </summary>
+        /// <param name="containerName"></param>
+        /// <returns>True if connecting is validated else false.</returns>
+        public static async Task<bool> ValidateConnection(string containerName = null)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(containerName) || containerName == "*")
+                {
+                    await _blobClient.ListContainersSegmentedAsync(null, ContainerListingDetails.None, 1, null, null, null);
+                }
+                else
+                {
+                    var blobContainer = _blobClient.GetContainerReference(containerName);
+                    await blobContainer.ListBlobsSegmentedAsync(null, true, BlobListingDetails.None, 1, null, null, null);
+                }
+                return true;
+            }
+            catch (StorageException exception)
+            {
+                if (exception.RequestInformation.HttpStatusCode == 403)
+                {
+                    return false;
+                }
+                return true;
+            }
+        }
+
+        /// <summary>
         /// List blob containers in a storage account.
         /// </summary>
         /// <returns>List of blob containers.</returns>

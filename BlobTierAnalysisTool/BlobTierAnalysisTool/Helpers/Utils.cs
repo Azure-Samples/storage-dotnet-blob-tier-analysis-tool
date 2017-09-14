@@ -1,4 +1,5 @@
-﻿using System.Text.RegularExpressions;
+﻿using System;
+using System.Text.RegularExpressions;
 
 namespace BlobTierAnalysisTool.Helpers
 {
@@ -38,8 +39,15 @@ namespace BlobTierAnalysisTool.Helpers
 
         public static bool IsValidContainerName(string containerName)
         {
-            var containerNameRegex = new Regex("^([a-z0-9]+(-[a-z0-9]+)*)$");
-            return containerNameRegex.IsMatch(containerName) || containerName == "*" || containerName == "$root" || containerName == "$logs";
+            try
+            {
+                Microsoft.WindowsAzure.Storage.NameValidator.ValidateContainerName(containerName);
+                return true;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
         }
     }
 }
