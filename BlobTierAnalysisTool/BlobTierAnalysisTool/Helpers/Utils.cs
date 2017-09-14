@@ -39,6 +39,10 @@ namespace BlobTierAnalysisTool.Helpers
 
         public static bool IsValidContainerName(string containerName)
         {
+            if (containerName == "*")
+            {
+                return true;
+            }
             try
             {
                 Microsoft.WindowsAzure.Storage.NameValidator.ValidateContainerName(containerName);

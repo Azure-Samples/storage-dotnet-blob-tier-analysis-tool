@@ -613,7 +613,7 @@ namespace BlobTierAnalysisTool
                 {
                     containerName = "*";
                 }
-                if (!string.IsNullOrWhiteSpace(containerName) && (Helpers.Utils.IsValidContainerName(containerName) || containerName == "*"))
+                if (!string.IsNullOrWhiteSpace(containerName) && Helpers.Utils.IsValidContainerName(containerName))
                 {
                     if (containerName != "*")
                     {
