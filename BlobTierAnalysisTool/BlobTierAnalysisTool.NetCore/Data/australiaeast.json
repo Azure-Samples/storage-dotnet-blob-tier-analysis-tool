@@ -1,0 +1,23 @@
+﻿{
+  "RegionName": "AustraliaEast",
+  "RegionCode": "Australia East",
+  "Costs": {
+    "Hot": {
+      "DataStorageCostPerGB": 0.02,
+      "WriteOperationsCostPerTenThousand": 0.055,
+      "ReadOperationsCostPerTenThousand": 0.0044,
+      "DataRetrievalCostPerGB": 0,
+      "DataWriteCostPerGB": 0
+    },
+    "Cool": {
+      "DataStorageCostPerGB": 0.015,
+      "WriteOperationsCostPerTenThousand": 0.10,
+      "ReadOperationsCostPerTenThousand": 0.01,
+      "DataRetrievalCostPerGB": 0.01,
+      "DataWriteCostPerGB": 0.0025
+    },
+    "Archive": null
+  }
+}
+
+

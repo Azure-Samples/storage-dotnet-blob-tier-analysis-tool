@@ -1,0 +1,29 @@
+﻿{
+  "RegionName": "EastUS2",
+  "RegionCode": "US East 2",
+  "Costs": {
+    "Hot": {
+      "DataStorageCostPerGB": 0.0184,
+      "WriteOperationsCostPerTenThousand": 0.05,
+      "ReadOperationsCostPerTenThousand": 0.004,
+      "DataRetrievalCostPerGB": 0,
+      "DataWriteCostPerGB": 0
+    },
+    "Cool": {
+      "DataStorageCostPerGB": 0.01,
+      "WriteOperationsCostPerTenThousand": 0.10,
+      "ReadOperationsCostPerTenThousand": 0.01,
+      "DataRetrievalCostPerGB": 0.01,
+      "DataWriteCostPerGB": 0.0025
+    },
+    "Archive": {
+      "DataStorageCostPerGB": 0.0018,
+      "WriteOperationsCostPerTenThousand": 0.30,
+      "ReadOperationsCostPerTenThousand": 0.15,
+      "DataRetrievalCostPerGB": 0.0015,
+      "DataWriteCostPerGB": 0
+    }
+  }
+}
+
+
