@@ -588,12 +588,18 @@ namespace BlobTierAnalysisTool
                 if (containerName != "*")
                 {
                     Console.WriteLine($"Checking if \"{containerName}\" blob container exists in the storage account...");
-                    if (!Helpers.BlobStorageHelper.DoesContainerExists(containerName).GetAwaiter().GetResult())
+                    var containerExistenceCheckResult = Helpers.BlobStorageHelper.DoesContainerExists(containerName).GetAwaiter().GetResult();
+                    var containerExists = containerExistenceCheckResult.Item1;
+                    var isValidConnectionString = containerExistenceCheckResult.Item2;
+                    if (!isValidConnectionString)
                     {
-                        Console.WriteLine("Either the specified blob container does not exist in the storage account or the connection string specified is invalid. Please modify the command line arguments and try again. Terminating application.");
-                        Console.WriteLine("Press any key to terminate the application");
-                        Console.ReadKey();
+                        Console.WriteLine("Unable to connect to storage account using the connection string provided. Please check the connection string and try again.");
                         ExitApplicationIfRequired("X");
+                    }
+                    if (!containerExists)
+                    {
+                        Console.WriteLine("Specified blob container does not exist in the storage account. Please specify a valid container name.");
+                        return GetContainerInput();
                     }
                 }
                 return containerName;
@@ -618,12 +624,18 @@ namespace BlobTierAnalysisTool
                     if (containerName != "*")
                     {
                         Console.WriteLine($"Checking if \"{containerName}\" blob container exists in the storage account...");
-                        if (!Helpers.BlobStorageHelper.DoesContainerExists(containerName).GetAwaiter().GetResult())
+                        var containerExistenceCheckResult = Helpers.BlobStorageHelper.DoesContainerExists(containerName).GetAwaiter().GetResult();
+                        var containerExists = containerExistenceCheckResult.Item1;
+                        var isValidConnectionString = containerExistenceCheckResult.Item2;
+                        if (!isValidConnectionString)
                         {
-                            Console.WriteLine("Either the specified blob container does not exist in the storage account or the connection string specified is invalid. Please check the value and try again. Terminating application.");
-                            Console.WriteLine("Press any key to terminate the application");
-                            Console.ReadKey();
+                            Console.WriteLine("Unable to connect to storage account using the connection string provided. Please check the connection string and try again.");
                             ExitApplicationIfRequired("X");
+                        }
+                        if (!containerExists)
+                        {
+                            Console.WriteLine("Specified blob container does not exist in the storage account. Please specify a valid container name.");
+                            return GetContainerInput();
                         }
                     }
                     return containerName;

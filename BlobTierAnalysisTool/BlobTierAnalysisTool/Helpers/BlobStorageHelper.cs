@@ -55,15 +55,21 @@ namespace BlobTierAnalysisTool.Helpers
         /// </summary>
         /// <param name="containerName">Name of the container.</param>
         /// <returns>True if container exists else false.</returns>
-        public static async Task<bool> DoesContainerExists(string containerName)
+        public static async Task<Tuple<bool, bool>> DoesContainerExists(string containerName)
         {
+            bool isValidConnection = true;
             try
             {
-                return await _blobClient.GetContainerReference(containerName).ExistsAsync();
+                bool doesContainerExist = await _blobClient.GetContainerReference(containerName).ExistsAsync();
+                return new Tuple<bool, bool>(doesContainerExist, isValidConnection);
             }
-            catch (Exception exception)
+            catch (StorageException exception)
             {
-                return false;
+                if (exception.RequestInformation.HttpStatusCode == 403)
+                {
+                    isValidConnection = false;
+                }
+                return new Tuple<bool, bool>(false, isValidConnection);
             }
         }
 
