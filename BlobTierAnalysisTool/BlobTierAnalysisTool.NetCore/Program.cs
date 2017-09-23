@@ -6,6 +6,7 @@ using System.IO;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Microsoft.WindowsAzure.Storage;
+using System.Globalization;
 
 namespace BlobTierAnalysisTool
 {
@@ -29,6 +30,7 @@ namespace BlobTierAnalysisTool
 
 		static void Main(string[] args)
 		{
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfoByIetfLanguageTag("en-US");
 			Console.WriteLine(new string('*', 80));
 			Console.WriteLine("Welcome to the Blob Tier Analysis Tool. This tool can:");
 			Console.WriteLine();
@@ -127,8 +129,8 @@ namespace BlobTierAnalysisTool
 				Console.WriteLine(new string('-', text.Length));
 				Console.WriteLine(text);
 				Console.WriteLine(new string('-', text.Length));
-				var filesSizeCountString = $"{folderStatistics.FilesStatistics.Count}/{Helpers.Utils.SizeAsString(folderStatistics.FilesStatistics.Size)} ({folderStatistics.FilesStatistics.Size} bytes)";
-				var matchingFilesSizeCountString = $"{folderStatistics.MatchingFilesStatistics.Count}/{Helpers.Utils.SizeAsString(folderStatistics.MatchingFilesStatistics.Size)} ({folderStatistics.MatchingFilesStatistics.Size} bytes)";
+				var filesSizeCountString = $"{folderStatistics.FilesStatistics.Count}/{Helpers.Utils.SizeAsString(folderStatistics.FilesStatistics.Size)}";
+				var matchingFilesSizeCountString = $"{folderStatistics.MatchingFilesStatistics.Count}/{Helpers.Utils.SizeAsString(folderStatistics.MatchingFilesStatistics.Size)}";
 				text = string.Format("{0, 40}{1, 40}", filesSizeCountString, matchingFilesSizeCountString);
 				Console.WriteLine(text);
 				Console.WriteLine(new string('-', text.Length));
@@ -137,8 +139,8 @@ namespace BlobTierAnalysisTool
 			Console.WriteLine();
 			Console.WriteLine("Summary");
 			text = string.Format("{0, 40}{1, 40}", "Total Files Count/Size", "Matching Files Count/Size");
-			var filesSizeCountSummaryString = $"{summaryFoldersStatistics.FilesStatistics.Count}/{Helpers.Utils.SizeAsString(summaryFoldersStatistics.FilesStatistics.Size)} ({summaryFoldersStatistics.FilesStatistics.Size} bytes)";
-			var matchingFilesSizeSummaryCountString = $"{summaryFoldersStatistics.MatchingFilesStatistics.Count}/{Helpers.Utils.SizeAsString(summaryFoldersStatistics.MatchingFilesStatistics.Size)} ({summaryFoldersStatistics.MatchingFilesStatistics.Size} bytes)";
+			var filesSizeCountSummaryString = $"{summaryFoldersStatistics.FilesStatistics.Count}/{Helpers.Utils.SizeAsString(summaryFoldersStatistics.FilesStatistics.Size)}";
+			var matchingFilesSizeSummaryCountString = $"{summaryFoldersStatistics.MatchingFilesStatistics.Count}/{Helpers.Utils.SizeAsString(summaryFoldersStatistics.MatchingFilesStatistics.Size)}";
 			text = string.Format("{0, 40}{1, 40}", filesSizeCountSummaryString, matchingFilesSizeSummaryCountString);
 			Console.WriteLine(text);
 			Console.WriteLine(new string('-', text.Length));
@@ -151,8 +153,9 @@ namespace BlobTierAnalysisTool
 			var storageCostsArchiveAccessTier = storageCosts[StandardBlobTier.Archive];
 			var totalFiles = summaryFoldersStatistics.MatchingFilesStatistics.Count;
 			var totalSize = summaryFoldersStatistics.MatchingFilesStatistics.Size;
-			var readTransactions = totalFiles * readPercentagePerMonth / 100;
 			var readOperations = totalSize * readPercentagePerMonth / 100;
+			var averageFileSize = (double)totalSize / totalFiles;
+			var readTransactions = readOperations / averageFileSize;
 			double writeTransactionsCost, storageCost, dataTierChangeCost;
 			if (storageCostsHotAccessTier != null)
 			{
@@ -222,6 +225,8 @@ namespace BlobTierAnalysisTool
 			Console.WriteLine();
 			Console.WriteLine("*Storage costs does not include charge for metadata storage.");
 			Console.WriteLine();
+			Console.WriteLine("*For \"Archive\" tier, preview prices are being used. Please note that it may take up to 15 hours to read a blob from this tier.");
+			Console.WriteLine();
 		}
 
 		private static void AnalyzeStorageAccount(IEnumerable<string> containerNames, Models.FilterCriteria filterCriteria, double readPercentagePerMonth)
@@ -235,7 +240,7 @@ namespace BlobTierAnalysisTool
 				Console.WriteLine($"Analyzing blobs in \"{containerName}\" blob container...");
 				var containerStats = Helpers.BlobStorageHelper.AnalyzeContainer(containerName, filterCriteria).GetAwaiter().GetResult();
 				containersStats.Add(containerStats);
-				var text = string.Format("{0, 12}{1, 40}{2, 40}", "Access Tier", "Total Blobs Count/Size", "Matching Blobs Count/Size");
+				var text = string.Format("{0, 12}{1, 50}{2, 50}", "Access Tier", "Total Block Blobs Count/Size", "Matching Block Blobs Count/Size");
 				if (showContainerLevelStatistics)
 				{
 					Console.WriteLine(new string('-', text.Length));
@@ -258,9 +263,9 @@ namespace BlobTierAnalysisTool
 					totalMatchingBlobsSize += matchingBlobStatistics.Size;
 					if (showContainerLevelStatistics)
 					{
-						var blobsSizeCountString = $"{blobStatistics.Count}/{Helpers.Utils.SizeAsString(blobStatistics.Size)} ({blobStatistics.Size} bytes)";
-						var matchingBlobsSizeCountString = $"{matchingBlobStatistics.Count}/{Helpers.Utils.SizeAsString(matchingBlobStatistics.Size)} ({matchingBlobStatistics.Size} bytes)";
-						text = string.Format("{0, 12}{1, 40}{2, 40}", label, blobsSizeCountString, matchingBlobsSizeCountString);
+						var blobsSizeCountString = $"{blobStatistics.Count}/{Helpers.Utils.SizeAsString(blobStatistics.Size)}";
+						var matchingBlobsSizeCountString = $"{matchingBlobStatistics.Count}/{Helpers.Utils.SizeAsString(matchingBlobStatistics.Size)}";
+						text = string.Format("{0, 12}{1, 50}{2, 50}", label, blobsSizeCountString, matchingBlobsSizeCountString);
 						Console.WriteLine(text);
 					}
 				}
@@ -271,7 +276,7 @@ namespace BlobTierAnalysisTool
 			}
 			Console.WriteLine();
 			Console.WriteLine("Summary for all containers");
-			var summaryText = string.Format("{0, 12}{1, 40}{2, 40}", "Access Tier", "Total Blobs Count/Size", "Matching Blobs Count/Size");
+			var summaryText = string.Format("{0, 12}{1, 50}{2, 50}", "Access Tier", "Total Block Blobs Count/Size", "Matching Block Blobs Count/Size");
 			Console.WriteLine(new string('-', summaryText.Length));
 			Console.WriteLine(summaryText);
 			Console.WriteLine(new string('-', summaryText.Length));
@@ -280,9 +285,9 @@ namespace BlobTierAnalysisTool
 				var label = key.ToString();
 				var blobStatistics = summaryContainerStats.BlobsStatistics[key];
 				var matchingBlobStatistics = summaryContainerStats.MatchingBlobsStatistics[key];
-				var blobsSizeCountString = $"{blobStatistics.Count}/{Helpers.Utils.SizeAsString(blobStatistics.Size)} ({blobStatistics.Size} bytes)";
-				var matchingBlobsSizeCountString = $"{matchingBlobStatistics.Count}/{Helpers.Utils.SizeAsString(matchingBlobStatistics.Size)} ({matchingBlobStatistics.Size} bytes)";
-				summaryText = string.Format("{0, 12}{1, 40}{2, 40}", label, blobsSizeCountString, matchingBlobsSizeCountString);
+				var blobsSizeCountString = $"{blobStatistics.Count}/{Helpers.Utils.SizeAsString(blobStatistics.Size)}";
+				var matchingBlobsSizeCountString = $"{matchingBlobStatistics.Count}/{Helpers.Utils.SizeAsString(matchingBlobStatistics.Size)}";
+				summaryText = string.Format("{0, 12}{1, 50}{2, 50}", label, blobsSizeCountString, matchingBlobsSizeCountString);
 				Console.WriteLine(summaryText);
 			}
 			Console.WriteLine(new string('-', summaryText.Length));
@@ -306,7 +311,7 @@ namespace BlobTierAnalysisTool
 				Console.WriteLine("/Size:<Minimum file size>. Specifies the minimum size of a blob / local file to be considered for analysis. Must be a value greater than on eqal to zero (0).");
 				Console.WriteLine("/TargetTier:<Either [H]ot, [C]ool or [A]rchive>. Specifies the target tier for cost calculations.");
 				Console.WriteLine("/Region:<Storage account region.>. Specifies the region for the storage account. Must be one of the following values: AustraliaEast, AustraliaSouthEast, BrazilSouth, CanadaCentral, CanadaEast, CentralIndia, CentralUS, EastAsia, EastUS, EastUS2, JapanEast, JapanWest, KoreaCentral, KoreaSouth, NorthCentralEurope, NorthCentralUS, SouthCentralUS, SouthIndia, SouthEastAsia, UKSouth, UKWest, WestCentralUS, WestEurope, WestUS, WestUS2");
-				Console.WriteLine("/ReadPercentagePerMonth:<blob reads percentage>. Specifies the % of blobs that will be read per month. A value of 100% would mean that each blob in the storage account will be read once per month. A value of 200% would mean that each blob in the storage account will be read twice per month.");
+				Console.WriteLine("/ReadPercentagePerMonth:<data reads percentage>. Specifies the % of data that will be read per month. A value of 100% would mean that all data in the storage account will be read once per month. A value of 200% would mean that all data in the storage account will be read twice per month.");
 				Console.WriteLine("/ShowContainerLevelStatistics:<true or false>. Indicates if container level statistics must be shown on console output.");
 				Console.WriteLine("/?. Displays the help for command line arguments.");
 				Console.WriteLine();
@@ -417,7 +422,6 @@ namespace BlobTierAnalysisTool
 		/// via user input.
 		/// </summary>
 		/// <returns>Source type.</returns>
-		/// </summary>
 		private static string GetSourceTypeInput()
 		{
 			var sourceTypeInput = TryParseCommandLineArgumentsToExtractValue(SourceTypeArgumentName);
@@ -456,7 +460,6 @@ namespace BlobTierAnalysisTool
 		/// via user input.
 		/// </summary>
 		/// <returns>Source type.</returns>
-		/// </summary>
 		private static double GetReadPercentagePerMonthInput()
 		{
 			var readPercentagePerMonthInput = TryParseCommandLineArgumentsToExtractValue(ReadPercentagePerMonthArgumentName);
@@ -471,7 +474,7 @@ namespace BlobTierAnalysisTool
 			}
 			Console.WriteLine();
 			Console.WriteLine(new string('*', 80));
-			Console.WriteLine("Enter a numeric value indicating % of blobs that will be read from the storage account on a monthly basis.");
+			Console.WriteLine("Enter a numeric value indicating % of data that will be read from the storage account on a monthly basis.");
 			Console.WriteLine("For example, If all blobs are read once a month, enter 100. If all blobs are read twice a month, enter 200.");
 			Console.WriteLine("Press the \"Enter\" key for default value (100%).");
 			Console.WriteLine("To exit the application, enter \"X\"");
@@ -835,7 +838,7 @@ namespace BlobTierAnalysisTool
 			long totalMatchingBlobs = 0;
 
 			Console.WriteLine($"Scenario: {scenarioText}");
-			var header = string.Format("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", "Access Tier", "Total Blobs Count", "Total Blobs Size", "Storage Costs/Month", "Read Costs/Month", "Total Costs/Month");
+			var header = string.Format("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", "Access Tier", "Block Blobs Count", "Block Blobs Capacity", "Storage Costs/Month", "Read Costs/Month", "Total Costs/Month");
 			Console.WriteLine();
 			Console.WriteLine("Current Storage Costs:");
 			Console.WriteLine(new string('-', header.Length));
@@ -856,11 +859,12 @@ namespace BlobTierAnalysisTool
 						totalSizeSourceTier += matchingItem.Size;
 						currentStorageCostSourceTier += matchingItem.Size / Helpers.Constants.GB * storageCostSourceTier.DataStorageCostPerGB;
 					}
-					var readTransactions = totalCountSourceTier * readPercentagePerMonth / 100;
 					var readOperations = totalSizeSourceTier * readPercentagePerMonth / 100;
+                    var averageBlobSize = totalCountSourceTier == 0 ? 0 : (double)totalSizeSourceTier / totalCountSourceTier;
+                    var readTransactions = averageBlobSize == 0 ? 0 : readOperations / averageBlobSize;
 					var readsCostSourceTier = CalculateReadsCost(sourceTier, readTransactions, readOperations, storageCosts);
 					var readsPlusStorageCostSourceTier = currentStorageCostSourceTier + readsCostSourceTier.GetValueOrDefault();
-					Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", sourceTier.ToString(), totalCountSourceTier, Helpers.Utils.SizeAsString(totalSizeSourceTier), currentStorageCostSourceTier.ToString("C"), readsCostSourceTier.HasValue ? readsCostSourceTier.Value.ToString("C") : "--", readsPlusStorageCostSourceTier.ToString("C"));
+                    Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", sourceTier.ToString(), totalCountSourceTier, Helpers.Utils.SizeAsString(totalSizeSourceTier), currentStorageCostSourceTier.ToString("C"), readsCostSourceTier.HasValue ? readsCostSourceTier.Value.ToString("C") : "--", readsPlusStorageCostSourceTier.ToString("C"));
 					currentStorageCosts += currentStorageCostSourceTier;
 					currentReadsCosts += readsCostSourceTier.GetValueOrDefault();
 					totalMatchingBlobs += totalCountSourceTier;
@@ -898,28 +902,30 @@ namespace BlobTierAnalysisTool
 					totalSizeTargetTier += matchingItem.Size;
 					currentStorageCostTargetTier += matchingItem.Size / Helpers.Constants.GB * storageCostTargetTier.DataStorageCostPerGB;
 				}
-				var readTransactions = totalCountTargetTier * readPercentagePerMonth / 100;
 				var readOperations = totalSizeTargetTier * readPercentagePerMonth / 100;
+                var averageBlobSize = totalCountTargetTier == 0 ? 0 : totalSizeTargetTier / totalCountTargetTier;
+                var readTransactions = averageBlobSize == 0 ? 0 : readOperations / averageBlobSize;
 				var readsCostTargetTier = CalculateReadsCost(targetTier, readTransactions, readOperations, storageCosts);
 				var readsPlusStorageCostTargetTier = currentStorageCostTargetTier + readsCostTargetTier.GetValueOrDefault();
 				currentStorageCosts += currentStorageCostTargetTier;
 				currentReadsCosts += readsCostTargetTier.GetValueOrDefault();
 				totalCount += totalCountTargetTier;
 				totalSize += totalSizeTargetTier;
-				Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", targetTier.ToString(), totalCountTargetTier, Helpers.Utils.SizeAsString(totalSizeTargetTier), currentStorageCostTargetTier.ToString("C"), readsCostTargetTier.HasValue ? readsCostTargetTier.Value.ToString("C") : "--", readsPlusStorageCostTargetTier.ToString("C"));
+                Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", targetTier.ToString(), totalCountTargetTier, Helpers.Utils.SizeAsString(totalSizeTargetTier), currentStorageCostTargetTier.ToString("C"), readsCostTargetTier.HasValue ? readsCostTargetTier.Value.ToString("C") : "--", readsPlusStorageCostTargetTier.ToString("C"));
 			}
 			else
 			{
 				Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 30}{4, 20}{5, 20}", targetTier.ToString(), "--", "--", "--", "--", "--");
 			}
 			Console.WriteLine(new string('-', header.Length));
-			Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", "Total", totalCount, Helpers.Utils.SizeAsString(totalSize), currentStorageCosts.ToString("C"), currentReadsCosts.ToString("C"), (currentStorageCosts + currentReadsCosts).ToString("C"));
+            Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", "Total", totalCount, Helpers.Utils.SizeAsString(totalSize), currentStorageCosts.ToString("C"), currentReadsCosts.ToString("C"), (currentStorageCosts + currentReadsCosts).ToString("C"));
 			Console.WriteLine(new string('-', header.Length));
 			Console.WriteLine();
 			if (storageCostTargetTier != null)
 			{
-				var readTransactions = totalCount * readPercentagePerMonth / 100;
 				var readOperations = totalSize * readPercentagePerMonth / 100;
+                var averageBlobSize = totalCount == 0 ? 0 : (double)totalSize / totalCount;
+                var readTransactions = averageBlobSize == 0 ? 0 : readOperations / averageBlobSize;
 				var readsCostAfterMigration = CalculateReadsCost(targetTier, readTransactions, readOperations, storageCosts);
 				var totalCostAfterMigration = storageCostsAfterMove + readsCostAfterMigration.GetValueOrDefault();
 				Console.WriteLine("Storage Costs After Migration:");
@@ -928,16 +934,22 @@ namespace BlobTierAnalysisTool
 				Console.WriteLine(new string('-', header.Length));
 				foreach (var sourceTier in sourceTiers)
 				{
-					Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", sourceTier.ToString(), 0, Helpers.Utils.SizeAsString(0), 0.ToString("C"), 0.ToString("C"), 0.ToString("C"));
+                    Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", sourceTier.ToString(), 0, Helpers.Utils.SizeAsString(0), 0.ToString("C"), 0.ToString("C"), 0.ToString("C"));
 				}
-				Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", targetTier.ToString(), totalCount, Helpers.Utils.SizeAsString(totalSize), storageCostsAfterMove.ToString("C"), readsCostAfterMigration.HasValue ? readsCostAfterMigration.Value.ToString("C") : "--", totalCostAfterMigration.ToString("C"));
+                Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", targetTier.ToString(), totalCount, Helpers.Utils.SizeAsString(totalSize), storageCostsAfterMove.ToString("C"), readsCostAfterMigration.HasValue ? readsCostAfterMigration.Value.ToString("C") : "--", totalCostAfterMigration.ToString("C"));
 				Console.WriteLine(new string('-', header.Length));
-				Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", "Total", totalCount, Helpers.Utils.SizeAsString(totalSize), storageCostsAfterMove.ToString("C"), readsCostAfterMigration.HasValue ? readsCostAfterMigration.Value.ToString("C") : "--", totalCostAfterMigration.ToString("C"));
-				Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", "Savings", "--", "--", (currentStorageCosts - storageCostsAfterMove).ToString("C"), (currentReadsCosts - readsCostAfterMigration.GetValueOrDefault()).ToString("C"), (currentStorageCosts + currentReadsCosts - storageCostsAfterMove - readsCostAfterMigration.GetValueOrDefault()).ToString("C"));
+                Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", "Total", totalCount, Helpers.Utils.SizeAsString(totalSize), storageCostsAfterMove.ToString("C"), readsCostAfterMigration.HasValue ? readsCostAfterMigration.Value.ToString("C") : "--", totalCostAfterMigration.ToString("C"));
+                var netSavingsStorageCosts = currentStorageCosts - storageCostsAfterMove;
+                var netSavingsReadCosts = currentReadsCosts - readsCostAfterMigration.GetValueOrDefault();
+                var netSavingsStoragePlusReadCosts = netSavingsStorageCosts + netSavingsReadCosts;
+                Console.WriteLine("{0, 12}{1, 20}{2, 20}{3, 20}{4, 20}{5, 20}", "Savings", "--", "--",
+                                  (netSavingsStorageCosts >= 0 ? "" : "-") + Math.Abs(netSavingsStorageCosts).ToString("C"),
+                                  (netSavingsReadCosts >= 0 ? "" : "-") + Math.Abs(netSavingsReadCosts).ToString("C"),
+                                  (netSavingsStoragePlusReadCosts >= 0 ? "" : "-") + Math.Abs(netSavingsStoragePlusReadCosts).ToString("C"));
 				Console.WriteLine(new string('-', header.Length));
-				Console.WriteLine("{0, 62}{1, 20}", "One time cost of data retrieval and changing blob access tier:", (dataTierChangeCost + dataRetrievalCost).ToString("C"));
-				var costSavings = currentStorageCosts + currentReadsCosts - totalCostAfterMigration + dataTierChangeCost + dataRetrievalCost;
-				Console.WriteLine("{0, 62}{1, 20}", costSavings >= 0 ? "Net Savings:" : "Cost Increase:", Math.Abs(costSavings).ToString("C"));
+                Console.WriteLine("{0, 62}{1, 20}", "One time cost of data retrieval and changing blob access tier:", (dataTierChangeCost + dataRetrievalCost).ToString("C"));
+                var costSavings = currentStorageCosts + currentReadsCosts - totalCostAfterMigration;// + dataTierChangeCost + dataRetrievalCost;
+                Console.WriteLine("{0, 62}{1, 20}", costSavings >= 0 ? "Net Savings (Per Month):" : "Cost Increase (Per Month):",  (costSavings >= 0 ? "" : "-") + Math.Abs(costSavings).ToString("C"));
 				Console.WriteLine(new string('-', header.Length));
 				Console.WriteLine();
 				Console.WriteLine("*All currency values are rounded to the nearest cent and are in US Dollars ($).");
@@ -945,6 +957,8 @@ namespace BlobTierAnalysisTool
 				Console.WriteLine("*Read costs does not include data egress costs.");
 				Console.WriteLine();
 				Console.WriteLine("*Storage costs do not include metadata charges.");
+				Console.WriteLine();
+				Console.WriteLine("*For \"Archive\" tier, preview prices are being used. Please note that it may take up to 15 hours to read a blob from this tier.");
 				Console.WriteLine();
 				Console.WriteLine($"To change the access tier of the blobs to \"{targetTier.ToString()}\", enter \"Y\" now. Enter any other key to terminate the application.");
 				Console.WriteLine("*Please be aware of the the one-time costs you will incur for changing the access tiers.");
