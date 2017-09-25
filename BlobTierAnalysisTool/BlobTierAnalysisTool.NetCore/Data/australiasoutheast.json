@@ -1,6 +1,6 @@
 ﻿{
-  "RegionName": "AustraliaSouthEast",
-  "RegionCode": "Australia South East",
+  "RegionCode": "AustraliaSouthEast",
+  "RegionName": "Australia South East",
   "Costs": {
     "Hot": {
       "DataStorageCostPerGB": 0.02,

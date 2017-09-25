@@ -1,6 +1,6 @@
 ﻿{
-  "RegionName": "EastUS2",
-  "RegionCode": "US East 2",
+  "RegionCode": "WestUS2",
+  "RegionName": "West US 2",
   "Costs": {
     "Hot": {
       "DataStorageCostPerGB": 0.0184,

@@ -1,16 +1,16 @@
 ﻿{
-  "RegionName": "EastUS2",
-  "RegionCode": "US East 2",
+  "RegionCode": "BrazilSouth",
+  "RegionName": "Brazil South",
   "Costs": {
     "Hot": {
-      "DataStorageCostPerGB": 0.0184,
-      "WriteOperationsCostPerTenThousand": 0.05,
-      "ReadOperationsCostPerTenThousand": 0.004,
+      "DataStorageCostPerGB": 0.0326,
+      "WriteOperationsCostPerTenThousand": 0.07,
+      "ReadOperationsCostPerTenThousand": 0.0056,
       "DataRetrievalCostPerGB": 0,
       "DataWriteCostPerGB": 0
     },
     "Cool": {
-      "DataStorageCostPerGB": 0.01,
+      "DataStorageCostPerGB": 0.0208,
       "WriteOperationsCostPerTenThousand": 0.10,
       "ReadOperationsCostPerTenThousand": 0.01,
       "DataRetrievalCostPerGB": 0.01,

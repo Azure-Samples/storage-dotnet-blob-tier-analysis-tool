@@ -1,11 +1,11 @@
 ﻿{
-  "RegionName": "EastUS2",
-  "RegionCode": "US East 2",
+  "RegionCode": "WestEurope",
+  "RegionName": "West Europe",
   "Costs": {
     "Hot": {
-      "DataStorageCostPerGB": 0.0184,
-      "WriteOperationsCostPerTenThousand": 0.05,
-      "ReadOperationsCostPerTenThousand": 0.004,
+      "DataStorageCostPerGB": 0.0196,
+      "WriteOperationsCostPerTenThousand": 0.054,
+      "ReadOperationsCostPerTenThousand": 0.0043,
       "DataRetrievalCostPerGB": 0,
       "DataWriteCostPerGB": 0
     },

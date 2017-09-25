@@ -1,20 +1,20 @@
 ﻿{
-  "RegionName": "EastUS2",
-  "RegionCode": "US East 2",
+  "RegionCode": "UKWest",
+  "RegionName": "UK West",
   "Costs": {
     "Hot": {
-      "DataStorageCostPerGB": 0.0184,
-      "WriteOperationsCostPerTenThousand": 0.05,
-      "ReadOperationsCostPerTenThousand": 0.004,
+      "DataStorageCostPerGB": 0.0192,
+      "WriteOperationsCostPerTenThousand": 0.059,
+      "ReadOperationsCostPerTenThousand": 0.0047,
       "DataRetrievalCostPerGB": 0,
       "DataWriteCostPerGB": 0
     },
     "Cool": {
-      "DataStorageCostPerGB": 0.01,
-      "WriteOperationsCostPerTenThousand": 0.10,
-      "ReadOperationsCostPerTenThousand": 0.01,
-      "DataRetrievalCostPerGB": 0.01,
-      "DataWriteCostPerGB": 0.0025
+      "DataStorageCostPerGB": 0.0105,
+      "WriteOperationsCostPerTenThousand": 0.11,
+      "ReadOperationsCostPerTenThousand": 0.011,
+      "DataRetrievalCostPerGB": 0.011,
+      "DataWriteCostPerGB": 0.0028
     },
     "Archive": null
   }

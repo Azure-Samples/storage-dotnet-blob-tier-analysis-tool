@@ -1,16 +1,16 @@
 ﻿{
-  "RegionName": "EastUS2",
-  "RegionCode": "US East 2",
+  "RegionName": "West India",
+  "RegionCode": "WestIndia",
   "Costs": {
     "Hot": {
-      "DataStorageCostPerGB": 0.0184,
-      "WriteOperationsCostPerTenThousand": 0.05,
-      "ReadOperationsCostPerTenThousand": 0.004,
+      "DataStorageCostPerGB": 0.02,
+      "WriteOperationsCostPerTenThousand": 0.055,
+      "ReadOperationsCostPerTenThousand": 0.0044,
       "DataRetrievalCostPerGB": 0,
       "DataWriteCostPerGB": 0
     },
     "Cool": {
-      "DataStorageCostPerGB": 0.01,
+      "DataStorageCostPerGB": 0.0152,
       "WriteOperationsCostPerTenThousand": 0.10,
       "ReadOperationsCostPerTenThousand": 0.01,
       "DataRetrievalCostPerGB": 0.01,
