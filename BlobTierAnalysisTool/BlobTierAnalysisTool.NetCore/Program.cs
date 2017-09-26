@@ -306,7 +306,7 @@ namespace BlobTierAnalysisTool
                 Console.WriteLine("You can run this application in non-interactive mode");
                 Console.WriteLine();
                 Console.WriteLine("Usage:");
-                Console.WriteLine("BlobTierAnalysisTool </SourceType:> </ConnectionString:> </Source:> </Days:> </Size:> </TargetTier:> </Region:>");
+                Console.WriteLine("BlobTierAnalysisTool </SourceType:> </ConnectionString:> </Source:> </Days:> </Size:> </TargetTier:> </Region:> </ReadPercentagePerMonth:> </ShowContainerLevelStatistics:> </AutoChangeTier>");
                 Console.WriteLine();
                 Console.WriteLine("/SourceType:<Either [L]ocal or [C]loud>. Specifies the type of source you want to analyze.");
                 Console.WriteLine("/ConnectionString:<Storage account connection string or Account Shared Access Signature (SAS) URL>. Specifies storage account connection string or an Account Shared Access Signature.");
@@ -357,7 +357,7 @@ namespace BlobTierAnalysisTool
             {
                 Console.WriteLine(new string('*', 80));
                 Console.WriteLine("Please specify the region for your storage account.");
-                Console.WriteLine("If you are using this tool to analyze cost of uploading local files to Azure Storage, this is the region of the targest account.");
+                Console.WriteLine("If you are using this tool to analyze cost of uploading local files to Azure Storage, this is the region of the target account.");
                 Console.WriteLine("If you are using this tool to analyze cost of tiering files already in Azure Storage, this is the region of your source account.");
                 Console.WriteLine("Valid values are: AustraliaEast, AustraliaSouthEast, BrazilSouth, CanadaCentral, CanadaEast, CentralIndia, CentralUS, EastAsia, EastUS, EastUS2, JapanEast, JapanWest, KoreaCentral, KoreaSouth, NorthCentralEurope, NorthCentralUS, SouthCentralUS, SouthIndia, SouthEastAsia, UKSouth, UKWest, WestCentralUS, WestEurope, WestUS, WestUS2");
                 Console.WriteLine("Press \"Enter\" key for default region (US East 2) or \"X\" to terminate the application.");
@@ -480,7 +480,7 @@ namespace BlobTierAnalysisTool
             Console.WriteLine();
             Console.WriteLine(new string('*', 80));
             Console.WriteLine("Enter a numeric value indicating % of data that will be read from the storage account on a monthly basis.");
-            Console.WriteLine("For example, If all blobs are read once a month, enter 100. If all blobs are read twice a month, enter 200.");
+            Console.WriteLine("For example, if all blobs are read once a month, enter 100. If only 50% of the total capacity is read, enter 50.");
             Console.WriteLine("Press the \"Enter\" key for default value (100%).");
             Console.WriteLine("To exit the application, enter \"X\"");
             Console.WriteLine(new string('*', 80));
@@ -787,31 +787,25 @@ namespace BlobTierAnalysisTool
             return showStatistics;
         }
 
-        private static void GetAutoChangeTierInput(StandardBlobTier targetTier)
+        private static Boolean GetAutoChangeTierInput(StandardBlobTier targetTier, string autoChangeTierArgument)
         {
-            var autoChangeTierArgument = TryParseCommandLineArgumentsToExtractValue(AutoChangeTierArgumentName);
+            if (string.IsNullOrWhiteSpace(autoChangeTierArgument))
+            {
+                Console.WriteLine($"To change the access tier of the blobs to \"{targetTier.ToString()}\", enter \"Y\" now. Enter any other key to terminate the application.");
+                Console.WriteLine("*Please be aware of the the one-time costs you will incur for changing the access tiers.");
+                autoChangeTierArgument = Console.ReadLine().ToUpperInvariant();
+            }
             if (!string.IsNullOrWhiteSpace(autoChangeTierArgument))
             {
-                var autoChangeTierInput = autoChangeTierArgument.Remove(0, AutoChangeTierArgumentName.Length);
-                if (!string.IsNullOrWhiteSpace(autoChangeTierInput))
+                switch (autoChangeTierArgument)
                 {
-                    if (!bool.TryParse(autoChangeTierInput, out autoChangeTier))
-                    {
-                        Console.WriteLine($"To change the access tier of the blobs to \"{targetTier.ToString()}\", enter \"Y\" now. Enter any other key to terminate the application.");
-                        Console.WriteLine("*Please be aware of the the one-time costs you will incur for changing the access tiers.");
-                        autoChangeTierInput = Console.ReadLine().ToUpperInvariant();
-                        switch (autoChangeTierInput)
-                        {
-                            case "Y":
-                                autoChangeTier = true;
-                                break;
-                            default:
-                                autoChangeTier = false;
-                                break;
-                        }
-                    }
+                    case "Y":
+                        return true;
+                    default:
+                        return false;
                 }
             }
+            return false;
         }
 
         /// <summary>
@@ -992,7 +986,12 @@ namespace BlobTierAnalysisTool
                 Console.WriteLine();
                 Console.WriteLine("*For \"Archive\" tier, preview prices are being used. Please note that it may take up to 15 hours to read a blob from this tier.");
                 Console.WriteLine();
-                GetAutoChangeTierInput(targetTier);
+                var autoChangeTierInput = TryParseCommandLineArgumentsToExtractValue(AutoChangeTierArgumentName);
+                if (!String.IsNullOrWhiteSpace(autoChangeTierInput))
+                {
+                    autoChangeTierInput = autoChangeTierInput.Remove(0, AutoChangeTierArgumentName.Length);
+                }
+                var autoChangeTier = GetAutoChangeTierInput(targetTier, autoChangeTierInput);
                 if (autoChangeTier)
                 {
                     Console.WriteLine($"Changing access tier of the blobs to \"{targetTier.ToString()}\"...");
