@@ -8,7 +8,7 @@ when objects are moved between the "Hot", "Cool" and "Archive" tiers.
 This project framework provides the following features:
 
 * Lists blobs in a blob container / all containers in a storage account.
-* Matches blobs against user-defined criteria or analysis.
+* Matches blobs against user-defined criteria for analysis.
 * Recommends potential savings in monthly storage costs when objects are moved between the "Hot", "Cool" and "Archive" tiers.
 * Changes access tier of analyzed blobs.
 
