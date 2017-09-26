@@ -1,21 +1,22 @@
 # Blob Tier Analysis Tool
 
-This tool analyzes the blobs in a storage account and recommends potential cost savings in storage costs
-if the blobs are moved from "Hot" or "Cool" tier to "Archive" tier.
+This tool analyzes blobs in a storage account and recommends potential cost savings
+when objects are moved between the "Hot", "Cool" and "Archive" tiers.
 
 ## Features
 
 This project framework provides the following features:
 
-* List blobs in a blob container/all blob containers in a storage account.
-* Matches blobs against user-defined criteria if they can be moved to "Archive" tier.
-* Recommends potential cost savings in monthly storage costs if blobs are moved from "Hot" or "Cool" tier to "Archive" tier.
-* Changes access tier from "Hot"/"Cool" to "Archive" tier.
+* Lists blobs in a blob container / all containers in a storage account.
+* Matches blobs against user-defined criteria or analysis.
+* Recommends potential savings in monthly storage costs when objects are moved between the "Hot", "Cool" and "Archive" tiers.
+* Changes access tier of analyzed blobs.
 
 ## Getting Started
 
-### Prerequisites
+- Either follow the installation instructions below or find out more about the command line version by running \"BlobTierAnalysisTool.exe /?\"
 
+### Prerequisites
 
 - .Net Framework 4.6
 - Azure Storage Client Library version 8.4+.
@@ -23,10 +24,7 @@ This project framework provides the following features:
 
 ### Installation
 
-(ideally very short)
-
-- Open solution in Visual Studio 2017.
-- Restore Nuget Packages.
-- Build solution.
-- Add connection string for your Azure Storage account.
-- Run the project.
+- Open solution in Visual Studio 2017
+- Install Nuget Packages
+- Build solution
+- Run project
