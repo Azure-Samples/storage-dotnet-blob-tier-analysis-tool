@@ -33,7 +33,7 @@ namespace BlobTierAnalysisTool
 
         static void Main(string[] args)
         {
-            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfoByIetfLanguageTag("en-US");
+            CultureInfo.CurrentCulture = new CultureInfo("en-US");
             Console.WriteLine(new string('*', 80));
             Console.WriteLine("Welcome to the Blob Tier Analysis Tool. This tool can:");
             Console.WriteLine();
@@ -366,7 +366,7 @@ namespace BlobTierAnalysisTool
                 ExitApplicationIfRequired(region);
             }
             if (region == "") region = "EastUS2";
-            var storageCostsDataFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", $"{region.ToLowerInvariant()}.json");
+            var storageCostsDataFilePath = Path.Combine(AppContext.BaseDirectory, "Data", $"{region.ToLowerInvariant()}.json");
             if (!File.Exists(storageCostsDataFilePath))
             {
                 Console.WriteLine("Either invalid region specified or storage costs for that region are not defined.");
