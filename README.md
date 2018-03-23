@@ -1,3 +1,9 @@
+---
+services: storage
+platforms: dotnet
+author: mihauss
+---
+
 # Blob Tier Analysis Tool
 
 This tool analyzes blobs in a storage account and recommends potential cost savings
