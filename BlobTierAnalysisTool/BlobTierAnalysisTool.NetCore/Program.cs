@@ -1,12 +1,10 @@
-﻿using Microsoft.WindowsAzure.Storage.Blob;
+﻿using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.IO;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using Microsoft.WindowsAzure.Storage;
 using System.Globalization;
+using System.IO;
+using System.Linq;
+using Microsoft.Azure.Storage.Blob;
 
 namespace BlobTierAnalysisTool
 {

@@ -1,10 +1,11 @@
-﻿using System;
-using System.Threading.Tasks;
-using Microsoft.WindowsAzure.Storage;
-using Microsoft.WindowsAzure.Storage.Auth;
-using Microsoft.WindowsAzure.Storage.Blob;
+﻿using Microsoft.Azure.Storage;
+using Microsoft.Azure.Storage.Auth;
+using Microsoft.Azure.Storage.Blob;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+
 
 namespace BlobTierAnalysisTool.Helpers
 {
