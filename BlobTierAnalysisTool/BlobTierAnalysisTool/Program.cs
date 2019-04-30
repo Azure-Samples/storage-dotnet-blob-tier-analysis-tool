@@ -1,16 +1,14 @@
-﻿using Microsoft.WindowsAzure.Storage.Blob;
+﻿using Microsoft.Azure.Storage.Blob;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.IO;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using Microsoft.WindowsAzure.Storage;
 using System.Globalization;
+using System.IO;
+using System.Linq;
 
 namespace BlobTierAnalysisTool
 {
-	class Program
+    class Program
 	{
 		private const string HelpArgumentName = "/?";
 		private const string StorageRegionArgumentName = "/Region:";

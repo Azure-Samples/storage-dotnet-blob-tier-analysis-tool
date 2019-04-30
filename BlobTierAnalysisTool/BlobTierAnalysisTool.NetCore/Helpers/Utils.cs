@@ -45,7 +45,7 @@ namespace BlobTierAnalysisTool.Helpers
             }
             try
             {
-                Microsoft.WindowsAzure.Storage.NameValidator.ValidateContainerName(containerName);
+                Microsoft.Azure.Storage.NameValidator.ValidateContainerName(containerName);
                 return true;
             }
             catch (ArgumentException)
