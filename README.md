@@ -20,17 +20,17 @@ This project framework provides the following features:
 
 ## Getting Started
 
-- Either follow the installation instructions below or find out more about the command line version by running \"BlobTierAnalysisTool.exe /?\"
+* Either follow the installation instructions below or find out more about the command line version by running \"BlobTierAnalysisTool.exe /?\"
 
 ### Prerequisites
 
-- .Net Framework 4.6
-- Azure Storage Client Library version 8.4+.
-
+* .Net Framework 4.7.2
+* Microsoft.Azure.Storage.Common Client Library version 10.0.2+.
+* Microsoft.Azure.Storage.Blob Client Library version 10.0.2+.
 
 ### Installation
 
-- Open solution in Visual Studio 2017
-- Install Nuget Packages
-- Build solution
-- Run project
+* Open solution in Visual Studio 2017
+* Install NuGet Packages
+* Build solution
+* Run project
