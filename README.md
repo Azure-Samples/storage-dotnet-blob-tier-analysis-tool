@@ -1,8 +1,14 @@
 ---
-services: storage
-platforms: dotnet
-author: michaelhauss
+page_type: sample
+languages:
+- csharp
+products:
+- azure
+description: "This tool analyzes blobs in a storage account and recommends potential cost savings
+when objects are moved between the Hot, Cool and Archive tiers."
+urlFragment: storage-dotnet-blob-tier-analysis-tool
 ---
+
 
 # Blob Tier Analysis Tool
 
