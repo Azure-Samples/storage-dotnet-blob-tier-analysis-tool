@@ -1,17 +1,17 @@
-﻿using Microsoft.Azure.Storage;
-using Microsoft.Azure.Storage.Auth;
-using Microsoft.Azure.Storage.Blob;
+﻿using Azure;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
+using Azure.Storage.Blobs.Specialized;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-
 namespace BlobTierAnalysisTool.Helpers
 {
     public static class BlobStorageHelper
     {
-        private static CloudBlobClient _blobClient;
+        private static BlobServiceClient blobServiceClient;
 
         /// <summary>
         /// Tries to parse a connection string and sets the storage account.
@@ -22,25 +22,9 @@ namespace BlobTierAnalysisTool.Helpers
         {
             try
             {
-                Uri sasUri = null;
-                if (Uri.TryCreate(connectionString, UriKind.Absolute, out sasUri))
-                {
-                    var sasToken = sasUri.Query;
-                    var baseUrl = sasUri.AbsoluteUri.Replace(sasToken, "");
-                    _blobClient = new CloudBlobClient(new Uri(baseUrl), new StorageCredentials(sasToken));
-                    return true;
-                }
-                else
-                {
-                    CloudStorageAccount _storageAccount;
-                    if (CloudStorageAccount.TryParse(connectionString, out _storageAccount))
-                    {
-                        _blobClient = _storageAccount.CreateCloudBlobClient();
-                        return true;
-                    }
+                blobServiceClient = new BlobServiceClient(connectionString);
+                return true;
 
-                }
-                return false;
             }
             catch (Exception)
             {
@@ -58,16 +42,12 @@ namespace BlobTierAnalysisTool.Helpers
             bool isValidConnection = true;
             try
             {
-                bool doesContainerExist = await _blobClient.GetContainerReference(containerName).ExistsAsync();
+                bool doesContainerExist = await blobServiceClient.GetBlobContainerClient(containerName).ExistsAsync();
                 return new Tuple<bool, bool>(doesContainerExist, isValidConnection);
             }
-            catch (StorageException exception)
+            catch (Exception)
             {
-                if (exception.RequestInformation.HttpStatusCode == 403)
-                {
-                    isValidConnection = false;
-                }
-                return new Tuple<bool, bool>(false, isValidConnection);
+                return new Tuple<bool, bool>(false, false);
             }
         }
 
@@ -79,28 +59,25 @@ namespace BlobTierAnalysisTool.Helpers
         /// </summary>
         /// <param name="containerName"></param>
         /// <returns>True if connecting is validated else false.</returns>
-        public static async Task<bool> ValidateConnection(string containerName = null)
+        public static bool ValidateConnection(string containerName = null)
         {
             try
             {
                 if (string.IsNullOrWhiteSpace(containerName) || containerName == "*")
                 {
-                    await _blobClient.ListContainersSegmentedAsync(null, ContainerListingDetails.None, 1, null, null, null);
+                    blobServiceClient.GetBlobContainers();
                 }
                 else
                 {
-                    var blobContainer = _blobClient.GetContainerReference(containerName);
-                    await blobContainer.ListBlobsSegmentedAsync(null, true, BlobListingDetails.None, 1, null, null, null);
+                    BlobContainerClient blobContainer = blobServiceClient.GetBlobContainerClient(containerName);
+                    blobContainer.GetBlobs();
                 }
+
                 return true;
             }
-            catch (StorageException exception)
+            catch (RequestFailedException ex) when (ex.Status == 403)
             {
-                if (exception.RequestInformation.HttpStatusCode == 403)
-                {
-                    return false;
-                }
-                return true;
+                return false;
             }
         }
 
@@ -111,15 +88,12 @@ namespace BlobTierAnalysisTool.Helpers
         public static async Task<IEnumerable<string>> ListContainers()
         {
             List<string> containers = new List<string>();
-            BlobContinuationToken token = null;
-            do
+
+            await foreach (var container in blobServiceClient.GetBlobContainersAsync())
             {
-                var result = await _blobClient.ListContainersSegmentedAsync(token);
-                token = result.ContinuationToken;
-                var blobContainers = result.Results.Select(blobContainer => blobContainer.Name); ;
-                containers.AddRange(blobContainers);
+                containers.Add(container.Name);
             }
-            while (token != null);
+
             return containers;
         }
 
@@ -136,71 +110,64 @@ namespace BlobTierAnalysisTool.Helpers
         /// </returns>
         public static async Task<Models.ContainerStatistics> AnalyzeContainer(string containerName, Models.FilterCriteria filterCriteria)
         {
-            var blobContainer = _blobClient.GetContainerReference(containerName);
+            var blobContainer = blobServiceClient.GetBlobContainerClient(containerName);
             var containerStats = new Models.ContainerStatistics(containerName);
-            BlobContinuationToken token = null;
             try
             {
-                do
+                await foreach (var blob in blobContainer.GetBlobsAsync())
                 {
-                    var result = await blobContainer.ListBlobsSegmentedAsync(null, true, BlobListingDetails.None, 250, token, null, null);
-                    token = result.ContinuationToken;
-                    var blobs = result.Results;
-                    foreach (var blob in blobs)
+                    if (blob != null)
                     {
-                        var cloudBlockBlob = blob as CloudBlockBlob;
-                        if (cloudBlockBlob != null)
+
+                        long blobSize = blob.Properties.ContentLength.GetValueOrDefault();
+
+                        DateTime blobLastModifiedDate = blob.Properties.LastModified.Value.DateTime;
+                        var doesBlobMatchFilterCriteria = DoesBlobMatchFilterCriteria(blobContainer.GetBlobClient(blob.Name), filterCriteria);
+                        var blobTier = blob.Properties.AccessTier;
+                        switch (blobTier.Value.ToString())
                         {
-                            long blobSize = cloudBlockBlob.Properties.Length;
-                            DateTime blobLastModifiedDate = cloudBlockBlob.Properties.LastModified.Value.DateTime;
-                            var doesBlobMatchFilterCriteria = DoesBlobMatchFilterCriteria(cloudBlockBlob, filterCriteria);
-                            var blobTier = cloudBlockBlob.Properties.StandardBlobTier;
-                            switch (blobTier)
-                            {
-                                case null:
-                                case StandardBlobTier.Hot:
-                                    var hotAccessTierStats = containerStats.BlobsStatistics[StandardBlobTier.Hot];
-                                    hotAccessTierStats.Count += 1;
-                                    hotAccessTierStats.Size += blobSize;
-                                    if (doesBlobMatchFilterCriteria)
-                                    {
-                                        var matchingHotAccessTierStats = containerStats.MatchingBlobsStatistics[StandardBlobTier.Hot];
-                                        matchingHotAccessTierStats.Count += 1;
-                                        matchingHotAccessTierStats.Size += blobSize;
-                                        matchingHotAccessTierStats.BlobNames.Add(cloudBlockBlob.Name);
-                                    }
-                                    break;
-                                case StandardBlobTier.Cool:
-                                    var coolAccessTierStats = containerStats.BlobsStatistics[StandardBlobTier.Cool];
-                                    coolAccessTierStats.Count += 1;
-                                    coolAccessTierStats.Size += blobSize;
-                                    if (doesBlobMatchFilterCriteria)
-                                    {
-                                        var matchingCoolAccessTierStats = containerStats.MatchingBlobsStatistics[StandardBlobTier.Cool];
-                                        matchingCoolAccessTierStats.Count += 1;
-                                        matchingCoolAccessTierStats.Size += blobSize;
-                                        matchingCoolAccessTierStats.BlobNames.Add(cloudBlockBlob.Name);
-                                    }
-                                    break;
-                                case StandardBlobTier.Archive:
-                                    var archiveAccessTierStats = containerStats.BlobsStatistics[StandardBlobTier.Archive];
-                                    archiveAccessTierStats.Count += 1;
-                                    archiveAccessTierStats.Size += blobSize;
-                                    if (doesBlobMatchFilterCriteria)
-                                    {
-                                        var matchingArchiveAccessTierStats = containerStats.MatchingBlobsStatistics[StandardBlobTier.Archive];
-                                        matchingArchiveAccessTierStats.Count += 1;
-                                        matchingArchiveAccessTierStats.Size += blobSize;
-                                        matchingArchiveAccessTierStats.BlobNames.Add(cloudBlockBlob.Name);
-                                    }
-                                    break;
-                            }
+                            case null:
+                            case "Hot":
+                                var hotAccessTierStats = containerStats.BlobsStatistics[AccessTier.Hot];
+                                hotAccessTierStats.Count += 1;
+                                hotAccessTierStats.Size += blobSize;
+                                if (doesBlobMatchFilterCriteria)
+                                {
+                                    var matchingHotAccessTierStats = containerStats.MatchingBlobsStatistics[AccessTier.Hot];
+                                    matchingHotAccessTierStats.Count += 1;
+                                    matchingHotAccessTierStats.Size += blobSize;
+                                    matchingHotAccessTierStats.BlobNames.Add(blob.Name);
+                                }
+                                break;
+                            case "Cool":
+                                var coolAccessTierStats = containerStats.BlobsStatistics[AccessTier.Cool];
+                                coolAccessTierStats.Count += 1;
+                                coolAccessTierStats.Size += blobSize;
+                                if (doesBlobMatchFilterCriteria)
+                                {
+                                    var matchingCoolAccessTierStats = containerStats.MatchingBlobsStatistics[AccessTier.Cool];
+                                    matchingCoolAccessTierStats.Count += 1;
+                                    matchingCoolAccessTierStats.Size += blobSize;
+                                    matchingCoolAccessTierStats.BlobNames.Add(blob.Name);
+                                }
+                                break;
+                            case "Archive":
+                                var archiveAccessTierStats = containerStats.BlobsStatistics[AccessTier.Archive];
+                                archiveAccessTierStats.Count += 1;
+                                archiveAccessTierStats.Size += blobSize;
+                                if (doesBlobMatchFilterCriteria)
+                                {
+                                    var matchingArchiveAccessTierStats = containerStats.MatchingBlobsStatistics[AccessTier.Archive];
+                                    matchingArchiveAccessTierStats.Count += 1;
+                                    matchingArchiveAccessTierStats.Size += blobSize;
+                                    matchingArchiveAccessTierStats.BlobNames.Add(blob.Name);
+                                }
+                                break;
                         }
                     }
                 }
-                while (token != null);
             }
-            catch (Exception exception)
+            catch (Exception)
             {
 
             }
@@ -212,17 +179,17 @@ namespace BlobTierAnalysisTool.Helpers
         /// </summary>
         /// <param name="containerName">Name of the blob container.</param>
         /// <param name="blobName">Name of the blob.</param>
-        /// <param name="targetTier"><see cref="StandardBlobTier"/> which indicates the new access tier for the blob.</param>
+        /// <param name="targetTier"><see cref="AccessTier"/> which indicates the new access tier for the blob.</param>
         /// <returns>True or false.</returns>
-        public static async Task<bool> ChangeAccessTier(string containerName, string blobName, StandardBlobTier targetTier)
+        public static async Task<bool> ChangeAccessTier(string containerName, string blobName, AccessTier targetTier)
         {
             try
             {
-                CloudBlockBlob blob = _blobClient.GetContainerReference(containerName).GetBlockBlobReference(blobName);
-                await blob.SetStandardBlobTierAsync(targetTier);
+                BlockBlobClient blob = blobServiceClient.GetBlobContainerClient(containerName).GetBlockBlobClient(blobName);
+                await blob.SetAccessTierAsync(targetTier);
                 return true;
             }
-            catch (Exception exception)
+            catch (Exception)
             {
                 return false;
             }
@@ -232,7 +199,7 @@ namespace BlobTierAnalysisTool.Helpers
         {
             get
             {
-                return _blobClient.Credentials.AccountName;
+                return blobServiceClient.AccountName;
             }
         }
 
@@ -242,22 +209,22 @@ namespace BlobTierAnalysisTool.Helpers
         /// <param name="blob"></param>
         /// <param name="filterCriteria"></param>
         /// <returns></returns>
-        private static bool DoesBlobMatchFilterCriteria(CloudBlockBlob blob, Models.FilterCriteria filterCriteria)
+        private static bool DoesBlobMatchFilterCriteria(BlobClient blob, Models.FilterCriteria filterCriteria)
         {
-            if (blob.Properties.StandardBlobTier == StandardBlobTier.Archive) return false;
+            if (blob.GetProperties().Value.AccessTier == AccessTier.Archive) return false;
             var dateTimeFrom = filterCriteria.LastModifiedDateFrom ?? DateTime.MinValue;
             var dateTimeTo = filterCriteria.LastModifiedDateTo ?? DateTime.MaxValue;
             var minBlobSize = filterCriteria.MinBlobSize;
             bool isDateTimeCheckPassed = false;
-            if (blob.Properties.LastModified.HasValue)
+            if (blob.GetProperties().Value.LastModified != null)
             {
-                var lastModified = blob.Properties.LastModified.Value.DateTime;
+                var lastModified = blob.GetProperties().Value.LastModified.DateTime;
                 if (dateTimeFrom <= lastModified && dateTimeTo >= lastModified)
                 {
                     isDateTimeCheckPassed = true;
                 }
             }
-            bool isBlobSizeCheckPassed = blob.Properties.Length >= minBlobSize;
+            bool isBlobSizeCheckPassed = blob.GetProperties().Value.ContentLength >= minBlobSize;
             return isDateTimeCheckPassed || isBlobSizeCheckPassed;
         }
     }
