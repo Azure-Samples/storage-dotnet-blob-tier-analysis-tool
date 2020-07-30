@@ -37,18 +37,10 @@ namespace BlobTierAnalysisTool.Helpers
         /// </summary>
         /// <param name="containerName">Name of the container.</param>
         /// <returns>True if container exists else false.</returns>
-        public static async Task<Tuple<bool, bool>> DoesContainerExists(string containerName)
+        public static async Task<bool> DoesContainerExists(string containerName)
         {
-            bool isValidConnection = true;
-            try
-            {
                 bool doesContainerExist = await blobServiceClient.GetBlobContainerClient(containerName).ExistsAsync();
-                return new Tuple<bool, bool>(doesContainerExist, isValidConnection);
-            }
-            catch (Exception)
-            {
-                return new Tuple<bool, bool>(false, false);
-            }
+                return doesContainerExist;
         }
 
         /// <summary>
@@ -211,20 +203,21 @@ namespace BlobTierAnalysisTool.Helpers
         /// <returns></returns>
         private static bool DoesBlobMatchFilterCriteria(BlobClient blob, Models.FilterCriteria filterCriteria)
         {
-            if (blob.GetProperties().Value.AccessTier == AccessTier.Archive) return false;
+            BlobProperties blobProperties = blob.GetProperties().Value;
+            if (blobProperties.AccessTier == AccessTier.Archive) return false;
             var dateTimeFrom = filterCriteria.LastModifiedDateFrom ?? DateTime.MinValue;
             var dateTimeTo = filterCriteria.LastModifiedDateTo ?? DateTime.MaxValue;
             var minBlobSize = filterCriteria.MinBlobSize;
             bool isDateTimeCheckPassed = false;
-            if (blob.GetProperties().Value.LastModified != null)
+            if (blobProperties.LastModified != null)
             {
-                var lastModified = blob.GetProperties().Value.LastModified.DateTime;
+                var lastModified = blobProperties.LastModified.DateTime;
                 if (dateTimeFrom <= lastModified && dateTimeTo >= lastModified)
                 {
                     isDateTimeCheckPassed = true;
                 }
             }
-            bool isBlobSizeCheckPassed = blob.GetProperties().Value.ContentLength >= minBlobSize;
+            bool isBlobSizeCheckPassed = blobProperties.ContentLength >= minBlobSize;
             return isDateTimeCheckPassed || isBlobSizeCheckPassed;
         }
     }

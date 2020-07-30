@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
+using System.Text.Json;
 
 namespace BlobTierAnalysisTool.Models
 {
@@ -35,9 +36,9 @@ namespace BlobTierAnalysisTool.Models
 
         public double DataWriteCostPerGB { get { return _dataWriteCostPerGB; } }
 
-        public static StorageCosts FromJson(JToken json)
+        public static StorageCosts FromJson(JsonElement json)
         {
-            if (json == null) return null;
+            if (json.Equals(null)) return null;
             try
             {
                 double dataStorageCostPerGB = 0;
@@ -45,15 +46,15 @@ namespace BlobTierAnalysisTool.Models
                 double readOperationsCostPerTenThousand = 0;
                 double dataRetrievalCostPerGB = 0;
                 double dataWriteCostPerGB = 0;
-                JToken token = json["DataStorageCostPerGB"];
+                JsonElement token = json.GetProperty("DataStorageCostPerGB");
                 double.TryParse(token.ToString(), out dataStorageCostPerGB);
-                token = json["WriteOperationsCostPerTenThousand"];
+                token = json.GetProperty("WriteOperationsCostPerTenThousand");
                 double.TryParse(token.ToString(), out writeOperationsCostPerTenThousand);
-                token = json["ReadOperationsCostPerTenThousand"];
+                token = json.GetProperty("ReadOperationsCostPerTenThousand");
                 double.TryParse(token.ToString(), out readOperationsCostPerTenThousand);
-                token = json["DataRetrievalCostPerGB"];
+                token = json.GetProperty("DataRetrievalCostPerGB");
                 double.TryParse(token.ToString(), out dataRetrievalCostPerGB);
-                token = json["DataWriteCostPerGB"];
+                token = json.GetProperty("DataWriteCostPerGB");
                 double.TryParse(token.ToString(), out dataWriteCostPerGB);
                 return new StorageCosts(dataStorageCostPerGB, writeOperationsCostPerTenThousand, readOperationsCostPerTenThousand, dataRetrievalCostPerGB, dataWriteCostPerGB);
             }

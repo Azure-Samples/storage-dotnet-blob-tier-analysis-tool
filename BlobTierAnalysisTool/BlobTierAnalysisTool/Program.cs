@@ -1,5 +1,5 @@
 ﻿using Azure.Storage.Blobs.Models;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -26,8 +26,6 @@ namespace BlobTierAnalysisTool
 		private static IEnumerable<string> sourcesToScan = null;
 		private static Models.FilterCriteria filterCriteria = null;
 		private static bool showContainerLevelStatistics = false;
-        private static bool autoChangeTier = false;
-        private static bool promptForChangeTier = false;
 
 		static void Main(string[] args)
 		{
@@ -53,12 +51,6 @@ namespace BlobTierAnalysisTool
 			Console.WriteLine();
 			GetHelpCommandLineArgument();
 
-			//storageCosts = new Dictionary<AccessTier, Models.StorageCosts>()
-			//{
-			//    { AccessTier.Hot, new Models.StorageCosts(0.0184, 0.05, 0.004, 0, 0) },
-			//    { AccessTier.Cool, new Models.StorageCosts(0.01, 0.10, 0.01, 0.01, 0.0025) },
-			//    { AccessTier.Archive, new Models.StorageCosts(0.0018, 0.30, 0.15, 0.0015, 0) }
-			//};
 			showContainerLevelStatistics = GetShowContainerLevelStatistics();
 			storageCosts = GetStorageCostsBasedOnStorageRegionInput();
 			var sourceType = GetSourceTypeInput();
@@ -74,7 +66,7 @@ namespace BlobTierAnalysisTool
 			{
 				var connectionString = GetConnectionStringInput();
 				var containerToSearch = GetContainerInput();
-				if (!Helpers.BlobStorageHelper.ValidateConnection(containerToSearch).GetAwaiter().GetResult())
+				if (!Helpers.BlobStorageHelper.ValidateConnection(containerToSearch))
 				{
 					Console.WriteLine("Unable to connect to storage account using the connection string provided. Please check the connection string and try again.");
 					ExitApplicationIfRequired("X");
@@ -403,10 +395,10 @@ namespace BlobTierAnalysisTool
 			try
 			{
 				var fileContents = File.ReadAllText(dataFilePath);
-				JObject obj = JObject.Parse(fileContents);
-				var hotTierStoragePricing = Models.StorageCosts.FromJson(obj["Costs"]["Hot"]);
-				var coolTierStoragePricing = Models.StorageCosts.FromJson(obj["Costs"]["Cool"]);
-				var archiveTierStoragePricing = Models.StorageCosts.FromJson(obj["Costs"]["Archive"]);
+				JsonDocument obj = JsonDocument.Parse(fileContents);
+				var hotTierStoragePricing = Models.StorageCosts.FromJson(obj.RootElement.GetProperty("Costs").GetProperty("Hot"));
+				var coolTierStoragePricing = Models.StorageCosts.FromJson(obj.RootElement.GetProperty("Costs").GetProperty("Cool"));
+				var archiveTierStoragePricing = Models.StorageCosts.FromJson(obj.RootElement.GetProperty("Costs").GetProperty("Archive"));
 				return new Dictionary<AccessTier, Models.StorageCosts>()
 				{
 					{ AccessTier.Hot, hotTierStoragePricing },
@@ -594,14 +586,13 @@ namespace BlobTierAnalysisTool
 				if (containerName != "*")
 				{
 					Console.WriteLine($"Checking if \"{containerName}\" blob container exists in the storage account...");
-					var containerExistenceCheckResult = Helpers.BlobStorageHelper.DoesContainerExists(containerName).GetAwaiter().GetResult();
-					var containerExists = containerExistenceCheckResult.Item1;
-					var isValidConnectionString = containerExistenceCheckResult.Item2;
+					var isValidConnectionString = Helpers.BlobStorageHelper.ValidateConnection(containerName);
 					if (!isValidConnectionString)
 					{
 						Console.WriteLine("Unable to connect to storage account using the connection string provided. Please check the connection string and try again.");
 						ExitApplicationIfRequired("X");
 					}
+					var containerExists = Helpers.BlobStorageHelper.DoesContainerExist(containerName).GetAwaiter().GetResult();
 					if (!containerExists)
 					{
 						Console.WriteLine("Specified blob container does not exist in the storage account. Please specify a valid container name.");
@@ -630,14 +621,13 @@ namespace BlobTierAnalysisTool
 					if (containerName != "*")
 					{
 						Console.WriteLine($"Checking if \"{containerName}\" blob container exists in the storage account...");
-						var containerExistenceCheckResult = Helpers.BlobStorageHelper.DoesContainerExists(containerName).GetAwaiter().GetResult();
-						var containerExists = containerExistenceCheckResult.Item1;
-						var isValidConnectionString = containerExistenceCheckResult.Item2;
+						var isValidConnectionString = Helpers.BlobStorageHelper.ValidateConnection(containerName);
 						if (!isValidConnectionString)
 						{
 							Console.WriteLine("Unable to connect to storage account using the connection string provided. Please check the connection string and try again.");
 							ExitApplicationIfRequired("X");
 						}
+						var containerExists = Helpers.BlobStorageHelper.DoesContainerExist(containerName).GetAwaiter().GetResult();
 						if (!containerExists)
 						{
 							Console.WriteLine("Specified blob container does not exist in the storage account. Please specify a valid container name.");

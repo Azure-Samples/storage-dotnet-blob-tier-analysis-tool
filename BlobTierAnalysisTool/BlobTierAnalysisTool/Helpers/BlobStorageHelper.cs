@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Configuration;
 using System.Threading.Tasks;
-using Microsoft.Azure;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Blobs;
+using Azure;
 
 namespace BlobTierAnalysisTool.Helpers
 {
@@ -37,18 +37,10 @@ namespace BlobTierAnalysisTool.Helpers
         /// </summary>
         /// <param name="containerName">Name of the container.</param>
         /// <returns>True if container exists else false.</returns>
-        public static async Task<Tuple<bool, bool>> DoesContainerExists(string containerName)
+        public static async Task<bool> DoesContainerExist(string containerName)
         {
-            bool isValidConnection = true;
-            try
-            {
                 bool doesContainerExist = await blobServiceClient.GetBlobContainerClient(containerName).ExistsAsync();
-                return new Tuple<bool, bool>(doesContainerExist, isValidConnection);
-            }
-            catch (Exception)
-            {
-                return new Tuple<bool, bool>(false, false);
-            }
+                return doesContainerExist;         
         }
 
         /// <summary>
@@ -59,7 +51,7 @@ namespace BlobTierAnalysisTool.Helpers
         /// </summary>
         /// <param name="containerName"></param>
         /// <returns>True if connecting is validated else false.</returns>
-        public static async Task<bool> ValidateConnection(string containerName = null)
+        public static bool ValidateConnection(string containerName = null)
         {
             try
             {
@@ -69,12 +61,13 @@ namespace BlobTierAnalysisTool.Helpers
                 }
                 else
                 {
-                    var blobContainer = blobServiceClient.GetBlobContainerClient(containerName);
+                    BlobContainerClient blobContainer = blobServiceClient.GetBlobContainerClient(containerName);
                     blobContainer.GetBlobs();
                 }
+
                 return true;
             }
-            catch (Exception)
+            catch (RequestFailedException ex) when (ex.Status == 403)
             {
                 return false;
             }
@@ -163,7 +156,7 @@ namespace BlobTierAnalysisTool.Helpers
                     }
                 }
             }
-            catch (Exception exception)
+            catch (Exception)
             {
 
             }
@@ -207,20 +200,21 @@ namespace BlobTierAnalysisTool.Helpers
         /// <returns></returns>
         private static bool DoesBlobMatchFilterCriteria(BlobClient blob, Models.FilterCriteria filterCriteria)
         {
-            if (blob.GetProperties().Value.AccessTier == AccessTier.Archive) return false;
+            BlobProperties blobProperties = blob.GetProperties().Value;
+            if (blobProperties.AccessTier == AccessTier.Archive) return false;
             var dateTimeFrom = filterCriteria.LastModifiedDateFrom ?? DateTime.MinValue;
             var dateTimeTo = filterCriteria.LastModifiedDateTo ?? DateTime.MaxValue;
             var minBlobSize = filterCriteria.MinBlobSize;
             bool isDateTimeCheckPassed = false;
-            if (blob.GetProperties().Value.LastModified != null)
+            if (blobProperties.LastModified != null)
             {
-                var lastModified = blob.GetProperties().Value.LastModified.DateTime;
+                var lastModified = blobProperties.LastModified.DateTime;
                 if (dateTimeFrom <= lastModified && dateTimeTo >= lastModified)
                 {
                     isDateTimeCheckPassed = true;
                 }
             }
-            bool isBlobSizeCheckPassed = blob.GetProperties().Value.ContentLength >= minBlobSize;
+            bool isBlobSizeCheckPassed = blobProperties.ContentLength >= minBlobSize;
             return isDateTimeCheckPassed || isBlobSizeCheckPassed;
         }
     }
