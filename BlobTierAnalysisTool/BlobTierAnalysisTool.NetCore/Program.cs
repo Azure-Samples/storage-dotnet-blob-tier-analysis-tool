@@ -66,7 +66,7 @@ namespace BlobTierAnalysisTool
             {
                 var connectionString = GetConnectionStringInput();
                 var containerToSearch = GetContainerInput();
-                if (!Helpers.BlobStorageHelper.ValidateConnection(containerToSearch))
+                if (!Helpers.BlobStorageHelper.ValidateConnectionAsync(containerToSearch).GetAwaiter().GetResult())
                 {
                     Console.WriteLine("Unable to connect to storage account using the connection string provided. Please check the connection string and try again.");
                     ExitApplicationIfRequired("X");
@@ -586,7 +586,7 @@ namespace BlobTierAnalysisTool
                 if (containerName != "*")
                 {
                     Console.WriteLine($"Checking if \"{containerName}\" blob container exists in the storage account...");
-                    var isValidConnectionString = Helpers.BlobStorageHelper.ValidateConnection(containerName);
+                    var isValidConnectionString = Helpers.BlobStorageHelper.ValidateConnectionAsync(containerName).GetAwaiter().GetResult();
                     if (!isValidConnectionString)
                     {
                         Console.WriteLine("Unable to connect to storage account using the connection string provided. Please check the connection string and try again.");
@@ -621,7 +621,7 @@ namespace BlobTierAnalysisTool
                     if (containerName != "*")
                     {
                         Console.WriteLine($"Checking if \"{containerName}\" blob container exists in the storage account...");
-                        var isValidConnectionString = Helpers.BlobStorageHelper.ValidateConnection(containerName);
+                        var isValidConnectionString = Helpers.BlobStorageHelper.ValidateConnectionAsync(containerName).GetAwaiter().GetResult();
                         if (!isValidConnectionString)
                         {
                             Console.WriteLine("Unable to connect to storage account using the connection string provided. Please check the connection string and try again.");
