@@ -37,7 +37,7 @@ namespace BlobTierAnalysisTool.Helpers
         /// </summary>
         /// <param name="containerName">Name of the container.</param>
         /// <returns>True if container exists else false.</returns>
-        public static async Task<bool> DoesContainerExists(string containerName)
+        public static async Task<bool> DoesContainerExist(string containerName)
         {
                 bool doesContainerExist = await s_blobServiceClient.GetBlobContainerClient(containerName).ExistsAsync();
                 return doesContainerExist;
@@ -114,7 +114,7 @@ namespace BlobTierAnalysisTool.Helpers
                         long blobSize = blob.Properties.ContentLength.GetValueOrDefault();
 
                         DateTime blobLastModifiedDate = blob.Properties.LastModified.Value.DateTime;
-                        bool doesBlobMatchFilterCriteria = DoesBlobMatchFilterCriteriaAsync(blobContainer.GetBlobClient(blob.Name), filterCriteria).GetAwaiter().GetResult();
+                        bool doesBlobMatchFilterCriteria = await DoesBlobMatchFilterCriteriaAsync(blobContainer.GetBlobClient(blob.Name), filterCriteria);
                         AccessTier? blobTier = blob.Properties.AccessTier;
                         switch (blobTier.Value.ToString())
                         {
@@ -161,7 +161,6 @@ namespace BlobTierAnalysisTool.Helpers
             }
             catch (Exception)
             {
-
             }
             return containerStats;
         }

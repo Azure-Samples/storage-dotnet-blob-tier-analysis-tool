@@ -12,7 +12,7 @@ namespace BlobTierAnalysisTool.Helpers
 {
     public static class BlobStorageHelper
     {
-        private static BlobServiceClient blobServiceClient;
+        private static BlobServiceClient s_blobServiceClient;
 
         /// <summary>
         /// Tries to parse a connection string and sets the storage account.
@@ -23,7 +23,7 @@ namespace BlobTierAnalysisTool.Helpers
         {
             try
             {
-                blobServiceClient = new BlobServiceClient(connectionString);
+                s_blobServiceClient = new BlobServiceClient(connectionString);
                 return true;
             }
             catch (Exception)
@@ -39,7 +39,7 @@ namespace BlobTierAnalysisTool.Helpers
         /// <returns>True if container exists else false.</returns>
         public static async Task<bool> DoesContainerExist(string containerName)
         {
-                bool doesContainerExist = await blobServiceClient.GetBlobContainerClient(containerName).ExistsAsync();
+                bool doesContainerExist = await s_blobServiceClient.GetBlobContainerClient(containerName).ExistsAsync();
                 return doesContainerExist;         
         }
 
@@ -51,18 +51,18 @@ namespace BlobTierAnalysisTool.Helpers
         /// </summary>
         /// <param name="containerName"></param>
         /// <returns>True if connecting is validated else false.</returns>
-        public static bool ValidateConnection(string containerName = null)
+        public static async Task<bool> ValidateConnectionAsync(string containerName = null)
         {
             try
             {
                 if (string.IsNullOrWhiteSpace(containerName) || containerName == "*")
                 {
-                    blobServiceClient.GetBlobContainers();
+                    s_blobServiceClient.GetBlobContainers();
                 }
                 else
                 {
-                    BlobContainerClient blobContainer = blobServiceClient.GetBlobContainerClient(containerName);
-                    blobContainer.GetBlobs();
+                    BlobContainerClient blobContainer = s_blobServiceClient.GetBlobContainerClient(containerName);
+                    await blobContainer.GetPropertiesAsync();
                 }
 
                 return true;
@@ -81,7 +81,7 @@ namespace BlobTierAnalysisTool.Helpers
         {
             List<string> containers = new List<string>();
 
-            await foreach (var container in blobServiceClient.GetBlobContainersAsync())
+            await foreach (var container in s_blobServiceClient.GetBlobContainersAsync())
             {
                 containers.Add(container.Name);
             }
@@ -101,7 +101,7 @@ namespace BlobTierAnalysisTool.Helpers
         /// </returns>
         public static async Task<Models.ContainerStatistics> AnalyzeContainer(string containerName, Models.FilterCriteria filterCriteria)
         {
-            var blobContainer = blobServiceClient.GetBlobContainerClient(containerName);
+            var blobContainer = s_blobServiceClient.GetBlobContainerClient(containerName);
             var containerStats = new Models.ContainerStatistics(containerName);
             try
             {
@@ -111,7 +111,7 @@ namespace BlobTierAnalysisTool.Helpers
                     {
                         long blobSize = blob.Properties.ContentLength.GetValueOrDefault();
                         DateTime blobLastModifiedDate = blob.Properties.LastModified.Value.DateTime;
-                        var doesBlobMatchFilterCriteria = DoesBlobMatchFilterCriteria(blobContainer.GetBlobClient(blob.Name), filterCriteria);
+                        var doesBlobMatchFilterCriteria = await DoesBlobMatchFilterCriteria(blobContainer.GetBlobClient(blob.Name), filterCriteria);
                         var blobTier = blob.Properties.AccessTier;
                         switch (blobTier.Value.ToString())
                         {
@@ -174,7 +174,7 @@ namespace BlobTierAnalysisTool.Helpers
         {
             try
             {
-                BlobClient blob = blobServiceClient.GetBlobContainerClient(containerName).GetBlobClient(blobName);
+                BlobClient blob = s_blobServiceClient.GetBlobContainerClient(containerName).GetBlobClient(blobName);
                 await blob.SetAccessTierAsync(targetTier);
                 return true;
             }
@@ -188,7 +188,7 @@ namespace BlobTierAnalysisTool.Helpers
         {
             get
             {
-                return blobServiceClient.AccountName;
+                return s_blobServiceClient.AccountName;
             }
         }
 
@@ -198,9 +198,9 @@ namespace BlobTierAnalysisTool.Helpers
         /// <param name="blob"></param>
         /// <param name="filterCriteria"></param>
         /// <returns></returns>
-        private static bool DoesBlobMatchFilterCriteria(BlobClient blob, Models.FilterCriteria filterCriteria)
+        private static async Task<bool> DoesBlobMatchFilterCriteria(BlobClient blob, Models.FilterCriteria filterCriteria)
         {
-            BlobProperties blobProperties = blob.GetProperties().Value;
+            BlobProperties blobProperties = await blob.GetPropertiesAsync();
             if (blobProperties.AccessTier == AccessTier.Archive) return false;
             var dateTimeFrom = filterCriteria.LastModifiedDateFrom ?? DateTime.MinValue;
             var dateTimeTo = filterCriteria.LastModifiedDateTo ?? DateTime.MaxValue;

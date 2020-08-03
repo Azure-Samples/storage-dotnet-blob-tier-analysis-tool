@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace BlobTierAnalysisTool
 {
@@ -27,7 +28,7 @@ namespace BlobTierAnalysisTool
 		private static Models.FilterCriteria filterCriteria = null;
 		private static bool showContainerLevelStatistics = false;
 
-		static void Main(string[] args)
+		static async Task Main(string[] args)
 		{
 			CultureInfo.CurrentCulture = CultureInfo.GetCultureInfoByIetfLanguageTag("en-US");
 			Console.WriteLine(new string('*', 80));
@@ -65,8 +66,8 @@ namespace BlobTierAnalysisTool
 			else
 			{
 				var connectionString = GetConnectionStringInput();
-				var containerToSearch = GetContainerInput();
-				if (!Helpers.BlobStorageHelper.ValidateConnection(containerToSearch))
+				var containerToSearch = await GetContainerInputAsync();
+				if (!await Helpers.BlobStorageHelper.ValidateConnectionAsync(containerToSearch))
 				{
 					Console.WriteLine("Unable to connect to storage account using the connection string provided. Please check the connection string and try again.");
 					ExitApplicationIfRequired("X");
@@ -74,7 +75,7 @@ namespace BlobTierAnalysisTool
 				if (containerToSearch == "*")
 				{
 					Console.WriteLine($"Listing blob containers in storage account...");
-					sourcesToScan = Helpers.BlobStorageHelper.ListContainers().GetAwaiter().GetResult();
+					sourcesToScan = await Helpers.BlobStorageHelper.ListContainers();
 				}
 				else
 				{
@@ -98,7 +99,7 @@ namespace BlobTierAnalysisTool
 			}
 			else
 			{
-				AnalyzeStorageAccount(sourcesToScan, filterCriteria, readPercentagePerMonth);
+				await AnalyzeStorageAccountAsync(sourcesToScan, filterCriteria, readPercentagePerMonth);
 			}
 
 			Console.WriteLine("Press any key to terminate the application.");
@@ -223,7 +224,7 @@ namespace BlobTierAnalysisTool
 			Console.WriteLine();
 		}
 
-		private static void AnalyzeStorageAccount(IEnumerable<string> containerNames, Models.FilterCriteria filterCriteria, double readPercentagePerMonth)
+		private static async Task AnalyzeStorageAccountAsync(IEnumerable<string> containerNames, Models.FilterCriteria filterCriteria, double readPercentagePerMonth)
 		{
 			long totalMatchingBlobs = 0;
 			long totalMatchingBlobsSize = 0;
@@ -232,7 +233,7 @@ namespace BlobTierAnalysisTool
 			foreach (var containerName in containerNames)
 			{
 				Console.WriteLine($"Analyzing blobs in \"{containerName}\" blob container...");
-				var containerStats = Helpers.BlobStorageHelper.AnalyzeContainer(containerName, filterCriteria).GetAwaiter().GetResult();
+				var containerStats = await Helpers.BlobStorageHelper.AnalyzeContainer(containerName, filterCriteria);
 				containersStats.Add(containerStats);
 				var text = string.Format("{0, 12}{1, 50}{2, 50}", "Access Tier", "Total Block Blobs Count/Size", "Matching Block Blobs Count/Size");
 				if (showContainerLevelStatistics)
@@ -285,7 +286,7 @@ namespace BlobTierAnalysisTool
 				Console.WriteLine(summaryText);
 			}
 			Console.WriteLine(new string('-', summaryText.Length));
-			DoBlobsCostAnalysis(containersStats, readPercentagePerMonth);
+			await DoBlobsCostAnalysisAsync(containersStats, readPercentagePerMonth);
 		}
 
 		private static void GetHelpCommandLineArgument()
@@ -569,7 +570,7 @@ namespace BlobTierAnalysisTool
 		/// via user input
 		/// </summary>
 		/// <returns>Blob container name.</returns>
-		private static string GetContainerInput()
+		private static async System.Threading.Tasks.Task<string> GetContainerInputAsync()
 		{
 			var containerArgument = TryParseCommandLineArgumentsToExtractValue(SourceArgumentName);
 			var containerName = string.Empty;
@@ -586,17 +587,17 @@ namespace BlobTierAnalysisTool
 				if (containerName != "*")
 				{
 					Console.WriteLine($"Checking if \"{containerName}\" blob container exists in the storage account...");
-					var isValidConnectionString = Helpers.BlobStorageHelper.ValidateConnection(containerName);
-					if (!isValidConnectionString)
+					var isValidConnectionString = Helpers.BlobStorageHelper.ValidateConnectionAsync(containerName);
+					if (!await isValidConnectionString)
 					{
 						Console.WriteLine("Unable to connect to storage account using the connection string provided. Please check the connection string and try again.");
 						ExitApplicationIfRequired("X");
 					}
-					var containerExists = Helpers.BlobStorageHelper.DoesContainerExist(containerName).GetAwaiter().GetResult();
+					var containerExists = await Helpers.BlobStorageHelper.DoesContainerExist(containerName);
 					if (!containerExists)
 					{
 						Console.WriteLine("Specified blob container does not exist in the storage account. Please specify a valid container name.");
-						return GetContainerInput();
+						return await GetContainerInputAsync();
 					}
 				}
 				return containerName;
@@ -621,17 +622,17 @@ namespace BlobTierAnalysisTool
 					if (containerName != "*")
 					{
 						Console.WriteLine($"Checking if \"{containerName}\" blob container exists in the storage account...");
-						var isValidConnectionString = Helpers.BlobStorageHelper.ValidateConnection(containerName);
-						if (!isValidConnectionString)
+						var isValidConnectionString = Helpers.BlobStorageHelper.ValidateConnectionAsync(containerName);
+						if (!await isValidConnectionString)
 						{
 							Console.WriteLine("Unable to connect to storage account using the connection string provided. Please check the connection string and try again.");
 							ExitApplicationIfRequired("X");
 						}
-						var containerExists = Helpers.BlobStorageHelper.DoesContainerExist(containerName).GetAwaiter().GetResult();
+						var containerExists = await Helpers.BlobStorageHelper.DoesContainerExist(containerName);
 						if (!containerExists)
 						{
 							Console.WriteLine("Specified blob container does not exist in the storage account. Please specify a valid container name.");
-							return GetContainerInput();
+							return await GetContainerInputAsync();
 						}
 					}
 					return containerName;
@@ -639,7 +640,7 @@ namespace BlobTierAnalysisTool
 				else
 				{
 					Console.WriteLine("Invalid container name. Please try again.");
-					return GetContainerInput();
+					return await GetContainerInputAsync();
 				}
 			}
 		}
@@ -825,7 +826,7 @@ namespace BlobTierAnalysisTool
 			return arguments.FirstOrDefault(a => a.StartsWith(argumentToSearch));
 		}
 
-		private static void DoBlobsCostAnalysis(List<Models.ContainerStatistics> statistics, double readPercentagePerMonth)
+		private static async Task DoBlobsCostAnalysisAsync(List<Models.ContainerStatistics> statistics, double readPercentagePerMonth)
 		{
 			var targetTierInput = TryParseCommandLineArgumentsToExtractValue(TargetTierArgumentName);
 			if (!String.IsNullOrWhiteSpace(targetTierInput))
@@ -993,7 +994,7 @@ namespace BlobTierAnalysisTool
                             var blobNames = matchingItem.BlobNames;
                             foreach (var blobName in blobNames)
                             {
-                                var result = Helpers.BlobStorageHelper.ChangeAccessTier(containerStatistics.Name, blobName, targetTier).GetAwaiter().GetResult();
+                                var result = await Helpers.BlobStorageHelper.ChangeAccessTier(containerStatistics.Name, blobName, targetTier);
                                 if (result)
                                 {
                                     successCount += 1;
