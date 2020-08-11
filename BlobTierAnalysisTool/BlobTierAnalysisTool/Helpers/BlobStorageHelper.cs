@@ -103,62 +103,55 @@ namespace BlobTierAnalysisTool.Helpers
         {
             var blobContainer = s_blobServiceClient.GetBlobContainerClient(containerName);
             var containerStats = new Models.ContainerStatistics(containerName);
-            try
+            await foreach (var blob in blobContainer.GetBlobsAsync())
             {
-                await foreach (var blob in blobContainer.GetBlobsAsync())
+                if (blob != null)
                 {
-                    if (blob != null)
+                    long blobSize = blob.Properties.ContentLength.GetValueOrDefault();
+                    DateTime blobLastModifiedDate = blob.Properties.LastModified.Value.DateTime;
+                    var doesBlobMatchFilterCriteria = await DoesBlobMatchFilterCriteria(blobContainer.GetBlobClient(blob.Name), filterCriteria);
+                    var blobTier = blob.Properties.AccessTier;
+                    switch (blobTier.Value.ToString())
                     {
-                        long blobSize = blob.Properties.ContentLength.GetValueOrDefault();
-                        DateTime blobLastModifiedDate = blob.Properties.LastModified.Value.DateTime;
-                        var doesBlobMatchFilterCriteria = await DoesBlobMatchFilterCriteria(blobContainer.GetBlobClient(blob.Name), filterCriteria);
-                        var blobTier = blob.Properties.AccessTier;
-                        switch (blobTier.Value.ToString())
-                        {
-                            case null:
-                            case "Hot":
-                                var hotAccessTierStats = containerStats.BlobsStatistics[AccessTier.Hot];
-                                hotAccessTierStats.Count += 1;
-                                hotAccessTierStats.Size += blobSize;
-                                if (doesBlobMatchFilterCriteria)
-                                {
-                                    var matchingHotAccessTierStats = containerStats.MatchingBlobsStatistics[AccessTier.Hot];
-                                    matchingHotAccessTierStats.Count += 1;
-                                    matchingHotAccessTierStats.Size += blobSize;
-                                    matchingHotAccessTierStats.BlobNames.Add(blob.Name);
-                                }
-                                break;
-                            case "Cool":
-                                var coolAccessTierStats = containerStats.BlobsStatistics[AccessTier.Cool];
-                                coolAccessTierStats.Count += 1;
-                                coolAccessTierStats.Size += blobSize;
-                                if (doesBlobMatchFilterCriteria)
-                                {
-                                    var matchingCoolAccessTierStats = containerStats.MatchingBlobsStatistics[AccessTier.Cool];
-                                    matchingCoolAccessTierStats.Count += 1;
-                                    matchingCoolAccessTierStats.Size += blobSize;
-                                    matchingCoolAccessTierStats.BlobNames.Add(blob.Name);
-                                }
-                                break;
-                            case "Archive":
-                                var archiveAccessTierStats = containerStats.BlobsStatistics[AccessTier.Archive];
-                                archiveAccessTierStats.Count += 1;
-                                archiveAccessTierStats.Size += blobSize;
-                                if (doesBlobMatchFilterCriteria)
-                                {
-                                    var matchingArchiveAccessTierStats = containerStats.MatchingBlobsStatistics[AccessTier.Archive];
-                                    matchingArchiveAccessTierStats.Count += 1;
-                                    matchingArchiveAccessTierStats.Size += blobSize;
-                                    matchingArchiveAccessTierStats.BlobNames.Add(blob.Name);
-                                }
-                                break;
-                        }
+                        case null:
+                        case "Hot":
+                            var hotAccessTierStats = containerStats.BlobsStatistics[AccessTier.Hot];
+                            hotAccessTierStats.Count += 1;
+                            hotAccessTierStats.Size += blobSize;
+                            if (doesBlobMatchFilterCriteria)
+                            {
+                                var matchingHotAccessTierStats = containerStats.MatchingBlobsStatistics[AccessTier.Hot];
+                                matchingHotAccessTierStats.Count += 1;
+                                matchingHotAccessTierStats.Size += blobSize;
+                                matchingHotAccessTierStats.BlobNames.Add(blob.Name);
+                            }
+                            break;
+                        case "Cool":
+                            var coolAccessTierStats = containerStats.BlobsStatistics[AccessTier.Cool];
+                            coolAccessTierStats.Count += 1;
+                            coolAccessTierStats.Size += blobSize;
+                            if (doesBlobMatchFilterCriteria)
+                            {
+                                var matchingCoolAccessTierStats = containerStats.MatchingBlobsStatistics[AccessTier.Cool];
+                                matchingCoolAccessTierStats.Count += 1;
+                                matchingCoolAccessTierStats.Size += blobSize;
+                                matchingCoolAccessTierStats.BlobNames.Add(blob.Name);
+                            }
+                            break;
+                        case "Archive":
+                            var archiveAccessTierStats = containerStats.BlobsStatistics[AccessTier.Archive];
+                            archiveAccessTierStats.Count += 1;
+                            archiveAccessTierStats.Size += blobSize;
+                            if (doesBlobMatchFilterCriteria)
+                            {
+                                var matchingArchiveAccessTierStats = containerStats.MatchingBlobsStatistics[AccessTier.Archive];
+                                matchingArchiveAccessTierStats.Count += 1;
+                                matchingArchiveAccessTierStats.Size += blobSize;
+                                matchingArchiveAccessTierStats.BlobNames.Add(blob.Name);
+                            }
+                            break;
                     }
                 }
-            }
-            catch (Exception)
-            {
-
             }
             return containerStats;
         }
