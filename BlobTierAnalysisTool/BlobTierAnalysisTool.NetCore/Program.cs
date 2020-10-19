@@ -1,10 +1,11 @@
-﻿using Newtonsoft.Json.Linq;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using Microsoft.Azure.Storage.Blob;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Azure.Storage.Blobs.Models;
 
 namespace BlobTierAnalysisTool
 {
@@ -22,14 +23,12 @@ namespace BlobTierAnalysisTool
         private const string ShowContainerLevelStatisticsArgumentName = "/ShowContainerLevelStatistics:";
         private const string AutoChangeTierArgumentName = "/AutoChangeTier:";
 
-        private static Dictionary<StandardBlobTier, Models.StorageCosts> storageCosts = null;
+        private static Dictionary<AccessTier, Models.StorageCosts> storageCosts = null;
         private static IEnumerable<string> sourcesToScan = null;
         private static Models.FilterCriteria filterCriteria = null;
         private static bool showContainerLevelStatistics = false;
-        private static bool autoChangeTier = false;
-        private static bool promptForChangeTier = false;
 
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             CultureInfo.CurrentCulture = new CultureInfo("en-US");
             Console.WriteLine(new string('*', 80));
@@ -53,12 +52,6 @@ namespace BlobTierAnalysisTool
             Console.WriteLine();
             GetHelpCommandLineArgument();
 
-            //storageCosts = new Dictionary<StandardBlobTier, Models.StorageCosts>()
-            //{
-            //    { StandardBlobTier.Hot, new Models.StorageCosts(0.0184, 0.05, 0.004, 0, 0) },
-            //    { StandardBlobTier.Cool, new Models.StorageCosts(0.01, 0.10, 0.01, 0.01, 0.0025) },
-            //    { StandardBlobTier.Archive, new Models.StorageCosts(0.0018, 0.30, 0.15, 0.0015, 0) }
-            //};
             showContainerLevelStatistics = GetShowContainerLevelStatistics();
             storageCosts = GetStorageCostsBasedOnStorageRegionInput();
             var sourceType = GetSourceTypeInput();
@@ -73,8 +66,8 @@ namespace BlobTierAnalysisTool
             else
             {
                 var connectionString = GetConnectionStringInput();
-                var containerToSearch = GetContainerInput();
-                if (!Helpers.BlobStorageHelper.ValidateConnection(containerToSearch).GetAwaiter().GetResult())
+                var containerToSearch = await GetContainerInputAsync();
+                if (!await Helpers.BlobStorageHelper.ValidateConnectionAsync(containerToSearch))
                 {
                     Console.WriteLine("Unable to connect to storage account using the connection string provided. Please check the connection string and try again.");
                     ExitApplicationIfRequired("X");
@@ -82,7 +75,7 @@ namespace BlobTierAnalysisTool
                 if (containerToSearch == "*")
                 {
                     Console.WriteLine($"Listing blob containers in storage account...");
-                    sourcesToScan = Helpers.BlobStorageHelper.ListContainers().GetAwaiter().GetResult();
+                    sourcesToScan = await Helpers.BlobStorageHelper.ListContainers();
                 }
                 else
                 {
@@ -106,7 +99,7 @@ namespace BlobTierAnalysisTool
             }
             else
             {
-                AnalyzeStorageAccount(sourcesToScan, filterCriteria, readPercentagePerMonth);
+                await AnalyzeStorageAccountAsync(sourcesToScan, filterCriteria, readPercentagePerMonth);
             }
 
             Console.WriteLine("Press any key to terminate the application.");
@@ -149,9 +142,9 @@ namespace BlobTierAnalysisTool
             Console.WriteLine("Cost Estimator");
             Console.WriteLine();
             Console.WriteLine("Scenario 1: Upload files to Azure Storage and keep all blobs in \"Hot\" access tier");
-            var storageCostsHotAccessTier = storageCosts[StandardBlobTier.Hot];
-            var storageCostsCoolAccessTier = storageCosts[StandardBlobTier.Cool];
-            var storageCostsArchiveAccessTier = storageCosts[StandardBlobTier.Archive];
+            var storageCostsHotAccessTier = storageCosts[AccessTier.Hot];
+            var storageCostsCoolAccessTier = storageCosts[AccessTier.Cool];
+            var storageCostsArchiveAccessTier = storageCosts[AccessTier.Archive];
             var totalFiles = summaryFoldersStatistics.MatchingFilesStatistics.Count;
             var totalSize = summaryFoldersStatistics.MatchingFilesStatistics.Size;
             var readOperations = totalSize * readPercentagePerMonth / 100;
@@ -164,7 +157,7 @@ namespace BlobTierAnalysisTool
                 storageCost = storageCostsHotAccessTier.DataStorageCostPerGB * totalSize / Helpers.Constants.GB;
                 //For calculation of read costs in "Hot" access tier, this is the formula used:
                 //read cost = # of blobs read x read transaction cost / 10000.
-                var totalReadsCostPerMonth = CalculateReadsCost(StandardBlobTier.Hot, readTransactions, readOperations, storageCosts);
+                var totalReadsCostPerMonth = CalculateReadsCost(AccessTier.Hot, readTransactions, readOperations, storageCosts);
                 Console.WriteLine(new string('-', 95));
                 Console.WriteLine("{0, 70}{1, 20}", "One time cost of uploading files in Azure Storage:", writeTransactionsCost.ToString("C"));
                 Console.WriteLine(new string('-', 95));
@@ -184,7 +177,7 @@ namespace BlobTierAnalysisTool
             {
                 writeTransactionsCost = storageCostsCoolAccessTier.WriteOperationsCostPerTenThousand * totalFiles / 10000;
                 storageCost = storageCostsCoolAccessTier.DataStorageCostPerGB * totalSize / Helpers.Constants.GB;
-                var totalReadsCostPerMonth = CalculateReadsCost(StandardBlobTier.Cool, readTransactions, readOperations, storageCosts);
+                var totalReadsCostPerMonth = CalculateReadsCost(AccessTier.Cool, readTransactions, readOperations, storageCosts);
                 Console.WriteLine(new string('-', 95));
                 Console.WriteLine("{0, 70}{1, 20}", "One time cost of uploading files in Azure Storage:", writeTransactionsCost.ToString("C"));
                 Console.WriteLine(new string('-', 95));
@@ -205,7 +198,7 @@ namespace BlobTierAnalysisTool
                 writeTransactionsCost = storageCostsHotAccessTier == null ? 0 : storageCostsHotAccessTier.WriteOperationsCostPerTenThousand * totalFiles / 10000;
                 storageCost = storageCostsArchiveAccessTier.DataStorageCostPerGB * totalSize / Helpers.Constants.GB;
                 dataTierChangeCost = storageCostsArchiveAccessTier.WriteOperationsCostPerTenThousand * totalFiles / 10000;
-                var totalReadsCostPerMonth = CalculateReadsCost(StandardBlobTier.Archive, readTransactions, readOperations, storageCosts);
+                var totalReadsCostPerMonth = CalculateReadsCost(AccessTier.Archive, readTransactions, readOperations, storageCosts);
                 Console.WriteLine(new string('-', 95));
                 Console.WriteLine("{0, 70}{1, 20}", "One time cost of uploading files in Azure Storage:", writeTransactionsCost.ToString("C"));
                 Console.WriteLine("{0, 70}{1, 20}", "One time cost of changing access tier from \"Hot\" to \"Archive\":", dataTierChangeCost.ToString("C"));
@@ -231,7 +224,7 @@ namespace BlobTierAnalysisTool
             Console.WriteLine();
         }
 
-        private static void AnalyzeStorageAccount(IEnumerable<string> containerNames, Models.FilterCriteria filterCriteria, double readPercentagePerMonth)
+        private static async Task AnalyzeStorageAccountAsync(IEnumerable<string> containerNames, Models.FilterCriteria filterCriteria, double readPercentagePerMonth)
         {
             long totalMatchingBlobs = 0;
             long totalMatchingBlobsSize = 0;
@@ -240,7 +233,7 @@ namespace BlobTierAnalysisTool
             foreach (var containerName in containerNames)
             {
                 Console.WriteLine($"Analyzing blobs in \"{containerName}\" blob container...");
-                var containerStats = Helpers.BlobStorageHelper.AnalyzeContainer(containerName, filterCriteria).GetAwaiter().GetResult();
+                var containerStats = await Helpers.BlobStorageHelper.AnalyzeContainer(containerName, filterCriteria);
                 containersStats.Add(containerStats);
                 var text = string.Format("{0, 12}{1, 50}{2, 50}", "Access Tier", "Total Block Blobs Count/Size", "Matching Block Blobs Count/Size");
                 if (showContainerLevelStatistics)
@@ -293,7 +286,7 @@ namespace BlobTierAnalysisTool
                 Console.WriteLine(summaryText);
             }
             Console.WriteLine(new string('-', summaryText.Length));
-            DoBlobsCostAnalysis(containersStats, readPercentagePerMonth);
+            await DoBlobsCostAnalysisAsync(containersStats, readPercentagePerMonth);
         }
 
         private static void GetHelpCommandLineArgument()
@@ -342,9 +335,9 @@ namespace BlobTierAnalysisTool
             }
         }
 
-        private static Dictionary<StandardBlobTier, Models.StorageCosts> GetStorageCostsBasedOnStorageRegionInput()
+        private static Dictionary<AccessTier, Models.StorageCosts> GetStorageCostsBasedOnStorageRegionInput()
         {
-            Dictionary<StandardBlobTier, Models.StorageCosts> storageCosts = null;
+            Dictionary<AccessTier, Models.StorageCosts> storageCosts = null;
             var regionInput = TryParseCommandLineArgumentsToExtractValue(StorageRegionArgumentName);
             var region = string.Empty;
             if (!string.IsNullOrWhiteSpace(regionInput))
@@ -398,20 +391,20 @@ namespace BlobTierAnalysisTool
         /// </summary>
         /// <param name="dataFilePath"></param>
         /// <returns></returns>
-        private static Dictionary<StandardBlobTier, Models.StorageCosts> ReadStorageCostsFromDataFile(string dataFilePath)
+        private static Dictionary<AccessTier, Models.StorageCosts> ReadStorageCostsFromDataFile(string dataFilePath)
         {
             try
             {
                 var fileContents = File.ReadAllText(dataFilePath);
-                JObject obj = JObject.Parse(fileContents);
-                var hotTierStoragePricing = Models.StorageCosts.FromJson(obj["Costs"]["Hot"]);
-                var coolTierStoragePricing = Models.StorageCosts.FromJson(obj["Costs"]["Cool"]);
-                var archiveTierStoragePricing = Models.StorageCosts.FromJson(obj["Costs"]["Archive"]);
-                return new Dictionary<StandardBlobTier, Models.StorageCosts>()
+                JsonDocument obj = JsonDocument.Parse(fileContents);
+                var hotTierStoragePricing = Models.StorageCosts.FromJson(obj.RootElement.GetProperty("Costs").GetProperty("Hot"));
+                var coolTierStoragePricing = Models.StorageCosts.FromJson(obj.RootElement.GetProperty("Costs").GetProperty("Cool"));
+                var archiveTierStoragePricing = Models.StorageCosts.FromJson(obj.RootElement.GetProperty("Costs").GetProperty("Archive"));
+                return new Dictionary<AccessTier, Models.StorageCosts>()
                 {
-                    { StandardBlobTier.Hot, hotTierStoragePricing },
-                    { StandardBlobTier.Cool, coolTierStoragePricing },
-                    { StandardBlobTier.Archive, archiveTierStoragePricing }
+                    { AccessTier.Hot, hotTierStoragePricing },
+                    { AccessTier.Cool, coolTierStoragePricing },
+                    { AccessTier.Archive, archiveTierStoragePricing }
                 };
             }
             catch (Exception)
@@ -577,7 +570,7 @@ namespace BlobTierAnalysisTool
         /// via user input
         /// </summary>
         /// <returns>Blob container name.</returns>
-        private static string GetContainerInput()
+        private static async Task<string> GetContainerInputAsync()
         {
             var containerArgument = TryParseCommandLineArgumentsToExtractValue(SourceArgumentName);
             var containerName = string.Empty;
@@ -594,18 +587,17 @@ namespace BlobTierAnalysisTool
                 if (containerName != "*")
                 {
                     Console.WriteLine($"Checking if \"{containerName}\" blob container exists in the storage account...");
-                    var containerExistenceCheckResult = Helpers.BlobStorageHelper.DoesContainerExists(containerName).GetAwaiter().GetResult();
-                    var containerExists = containerExistenceCheckResult.Item1;
-                    var isValidConnectionString = containerExistenceCheckResult.Item2;
+                    var isValidConnectionString = await Helpers.BlobStorageHelper.ValidateConnectionAsync(containerName);
                     if (!isValidConnectionString)
                     {
                         Console.WriteLine("Unable to connect to storage account using the connection string provided. Please check the connection string and try again.");
                         ExitApplicationIfRequired("X");
                     }
+                    var containerExists = await Helpers.BlobStorageHelper.DoesContainerExist(containerName);
                     if (!containerExists)
                     {
                         Console.WriteLine("Specified blob container does not exist in the storage account. Please specify a valid container name.");
-                        return GetContainerInput();
+                        return await GetContainerInputAsync();
                     }
                 }
                 return containerName;
@@ -630,18 +622,17 @@ namespace BlobTierAnalysisTool
                     if (containerName != "*")
                     {
                         Console.WriteLine($"Checking if \"{containerName}\" blob container exists in the storage account...");
-                        var containerExistenceCheckResult = Helpers.BlobStorageHelper.DoesContainerExists(containerName).GetAwaiter().GetResult();
-                        var containerExists = containerExistenceCheckResult.Item1;
-                        var isValidConnectionString = containerExistenceCheckResult.Item2;
+                        var isValidConnectionString = await Helpers.BlobStorageHelper.ValidateConnectionAsync(containerName);
                         if (!isValidConnectionString)
                         {
                             Console.WriteLine("Unable to connect to storage account using the connection string provided. Please check the connection string and try again.");
                             ExitApplicationIfRequired("X");
                         }
+                        var containerExists = await Helpers.BlobStorageHelper.DoesContainerExist(containerName);
                         if (!containerExists)
                         {
                             Console.WriteLine("Specified blob container does not exist in the storage account. Please specify a valid container name.");
-                            return GetContainerInput();
+                            return await GetContainerInputAsync();
                         }
                     }
                     return containerName;
@@ -649,7 +640,7 @@ namespace BlobTierAnalysisTool
                 else
                 {
                     Console.WriteLine("Invalid container name. Please try again.");
-                    return GetContainerInput();
+                    return await GetContainerInputAsync();
                 }
             }
         }
@@ -738,9 +729,9 @@ namespace BlobTierAnalysisTool
         /// </summary>
         /// <param name="targetTierInput"></param>
         /// <returns>Target blob tier.</returns>
-        private static StandardBlobTier GetTargetBlobTierInput(string targetTierInput)
+        private static AccessTier GetTargetBlobTierInput(string targetTierInput)
         {
-            var targetTier = StandardBlobTier.Unknown;
+            var targetTier = new AccessTier();
             if (string.IsNullOrWhiteSpace(targetTierInput))
             {
                 Console.WriteLine(new string('*', 80));
@@ -754,13 +745,13 @@ namespace BlobTierAnalysisTool
             switch (targetTierInput)
             {
                 case "A":
-                    targetTier = StandardBlobTier.Archive;
+                    targetTier = AccessTier.Archive;
                     break;
                 case "C":
-                    targetTier = StandardBlobTier.Cool;
+                    targetTier = AccessTier.Cool;
                     break;
                 case "H":
-                    targetTier = StandardBlobTier.Hot;
+                    targetTier = AccessTier.Hot;
                     break;
                 default:
                     Console.WriteLine("Invalid target tier input. Please enter one of the following values: \"A\", \"C\" or \"H\".");
@@ -785,7 +776,7 @@ namespace BlobTierAnalysisTool
             return showStatistics;
         }
 
-        private static Boolean GetAutoChangeTierInput(StandardBlobTier targetTier, string autoChangeTierArgument)
+        private static Boolean GetAutoChangeTierInput(AccessTier targetTier, string autoChangeTierArgument)
         {
             if (string.IsNullOrWhiteSpace(autoChangeTierArgument))
             {
@@ -835,19 +826,19 @@ namespace BlobTierAnalysisTool
             return arguments.FirstOrDefault(a => a.StartsWith(argumentToSearch));
         }
 
-        private static void DoBlobsCostAnalysis(List<Models.ContainerStatistics> statistics, double readPercentagePerMonth)
+        private static async Task DoBlobsCostAnalysisAsync(List<Models.ContainerStatistics> statistics, double readPercentagePerMonth)
         {
             var targetTierInput = TryParseCommandLineArgumentsToExtractValue(TargetTierArgumentName);
             if (!String.IsNullOrWhiteSpace(targetTierInput))
             {
                 targetTierInput = targetTierInput.Remove(0, TargetTierArgumentName.Length);
             }
-            StandardBlobTier targetTier = GetTargetBlobTierInput(targetTierInput);
-            List<StandardBlobTier> sourceTiers = new List<StandardBlobTier>()
+            AccessTier targetTier = GetTargetBlobTierInput(targetTierInput);
+            List<AccessTier> sourceTiers = new List<AccessTier>()
             {
-                StandardBlobTier.Hot,
-                StandardBlobTier.Cool,
-                StandardBlobTier.Archive
+                AccessTier.Hot,
+                AccessTier.Cool,
+                AccessTier.Archive
             };
             sourceTiers.Remove(targetTier);
             var scenarioText = $"Move blobs from other access tiers to \"{targetTier.ToString()}\" access tier.";
@@ -894,7 +885,7 @@ namespace BlobTierAnalysisTool
                     totalMatchingBlobs += totalCountSourceTier;
                     totalCount += totalCountSourceTier;
                     totalSize += totalSizeSourceTier;
-                    if ((sourceTier == StandardBlobTier.Hot && targetTier == StandardBlobTier.Cool) || (sourceTier == StandardBlobTier.Hot && targetTier == StandardBlobTier.Archive) || (sourceTier == StandardBlobTier.Cool && targetTier == StandardBlobTier.Archive))
+                    if ((sourceTier == AccessTier.Hot && targetTier == AccessTier.Cool) || (sourceTier == AccessTier.Hot && targetTier == AccessTier.Archive) || (sourceTier == AccessTier.Cool && targetTier == AccessTier.Archive))
                     {
                         if (storageCostTargetTier != null)
                         {
@@ -902,7 +893,7 @@ namespace BlobTierAnalysisTool
                             dataRetrievalCost += totalSizeSourceTier / Helpers.Constants.GB * storageCostTargetTier.DataWriteCostPerGB;
                         }
                     }
-                    if ((sourceTier == StandardBlobTier.Archive && targetTier == StandardBlobTier.Hot) || (sourceTier == StandardBlobTier.Archive && targetTier == StandardBlobTier.Cool) || (sourceTier == StandardBlobTier.Cool && targetTier == StandardBlobTier.Hot))
+                    if ((sourceTier == AccessTier.Archive && targetTier == AccessTier.Hot) || (sourceTier == AccessTier.Archive && targetTier == AccessTier.Cool) || (sourceTier == AccessTier.Cool && targetTier == AccessTier.Hot))
                     {
                         dataTierChangeCost += totalCountSourceTier * storageCostSourceTier.ReadOperationsCostPerTenThousand / 10000;
                         dataRetrievalCost += totalSizeSourceTier / Helpers.Constants.GB * storageCostTargetTier.DataRetrievalCostPerGB;
@@ -1003,7 +994,7 @@ namespace BlobTierAnalysisTool
                             var blobNames = matchingItem.BlobNames;
                             foreach (var blobName in blobNames)
                             {
-                                var result = Helpers.BlobStorageHelper.ChangeAccessTier(containerStatistics.Name, blobName, targetTier).GetAwaiter().GetResult();
+                                var result = await Helpers.BlobStorageHelper.ChangeAccessTier(containerStatistics.Name, blobName, targetTier);
                                 if (result)
                                 {
                                     successCount += 1;
@@ -1035,15 +1026,15 @@ namespace BlobTierAnalysisTool
             }
         }
 
-        private static double? CalculateReadsCost(StandardBlobTier sourceTier, double readTransactions, double readOperations, Dictionary<StandardBlobTier, Models.StorageCosts> costs)
+        private static double? CalculateReadsCost(AccessTier sourceTier, double readTransactions, double readOperations, Dictionary<AccessTier, Models.StorageCosts> costs)
         {
             double? readCostsPerMonth = null;
-            var storageCostsHotAccessTier = costs[StandardBlobTier.Hot];
-            var storageCostsCoolAccessTier = costs[StandardBlobTier.Cool];
-            var storageCostsArchiveAccessTier = costs[StandardBlobTier.Archive];
-            switch (sourceTier)
+            var storageCostsHotAccessTier = costs[AccessTier.Hot];
+            var storageCostsCoolAccessTier = costs[AccessTier.Cool];
+            var storageCostsArchiveAccessTier = costs[AccessTier.Archive];
+            switch (sourceTier.ToString())
             {
-                case StandardBlobTier.Hot:
+                case "Hot":
                     {
                         if (storageCostsHotAccessTier != null)
                         {
@@ -1052,7 +1043,7 @@ namespace BlobTierAnalysisTool
                         }
                         break;
                     }
-                case StandardBlobTier.Cool:
+                case "Cool":
                     {
                         if (storageCostsCoolAccessTier != null)
                         {
@@ -1061,7 +1052,7 @@ namespace BlobTierAnalysisTool
                         }
                         break;
                     }
-                case StandardBlobTier.Archive:
+                case "Archive":
                     {
                         if (storageCostsArchiveAccessTier != null)
                         {

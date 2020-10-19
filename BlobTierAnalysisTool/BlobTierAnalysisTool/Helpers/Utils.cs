@@ -43,15 +43,22 @@ namespace BlobTierAnalysisTool.Helpers
             {
                 return true;
             }
-            try
-            {
-                Microsoft.Azure.Storage.NameValidator.ValidateContainerName(containerName);
-                return true;
-            }
-            catch (ArgumentException)
+            return ValidateContainerName(containerName);
+        }
+
+        private static bool ValidateContainerName(string containerName)
+        {
+            RegexOptions regexOptions = RegexOptions.Singleline | RegexOptions.ExplicitCapture | RegexOptions.CultureInvariant;
+            Regex containerRegex = new Regex("^[a-z0-9]+(-[a-z0-9]+)*$", regexOptions);
+            if (containerName.Length < 3 || containerName.Length > 63)
             {
                 return false;
             }
+            if (!containerRegex.IsMatch(containerName))
+            {
+                return false;
+            }
+            return true;
         }
     }
 }

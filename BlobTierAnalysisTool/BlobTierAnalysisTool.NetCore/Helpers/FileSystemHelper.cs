@@ -50,7 +50,7 @@ namespace BlobTierAnalysisTool.Helpers
                 files.AddRange(filesInDirectory.ToList());
                 return files;
             }
-            catch (Exception excep)
+            catch (Exception)
             {
                 return files;
             }

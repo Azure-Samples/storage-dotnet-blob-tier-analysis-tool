@@ -1,11 +1,11 @@
-﻿using Microsoft.Azure.Storage.Blob;
+﻿using Azure.Storage.Blobs.Models;
 using System.Collections.Generic;
 
 namespace BlobTierAnalysisTool.Models
 {
     public class ContainerStatistics
     {
-        private readonly Dictionary<StandardBlobTier, BlobsStatistics> _blobsStatistics, _matchingBlobsStatistics;
+        private readonly Dictionary<AccessTier, BlobsStatistics> _blobsStatistics, _matchingBlobsStatistics;
 
         private readonly string _name;
 
@@ -16,17 +16,17 @@ namespace BlobTierAnalysisTool.Models
         public ContainerStatistics(string blobContainerName)
         {
             _name = blobContainerName;
-            _blobsStatistics = new Dictionary<StandardBlobTier, BlobsStatistics>()
+            _blobsStatistics = new Dictionary<AccessTier, BlobsStatistics>()
             {
-                {StandardBlobTier.Hot, new BlobsStatistics()},
-                {StandardBlobTier.Cool, new BlobsStatistics()},
-                {StandardBlobTier.Archive, new BlobsStatistics()}
+                {AccessTier.Hot, new BlobsStatistics()},
+                {AccessTier.Cool, new BlobsStatistics()},
+                {AccessTier.Archive, new BlobsStatistics()}
             };
-            _matchingBlobsStatistics = new Dictionary<StandardBlobTier, BlobsStatistics>()
+            _matchingBlobsStatistics = new Dictionary<AccessTier, BlobsStatistics>()
             {
-                {StandardBlobTier.Hot, new BlobsStatistics()},
-                {StandardBlobTier.Cool, new BlobsStatistics()},
-                {StandardBlobTier.Archive, new BlobsStatistics()}
+                {AccessTier.Hot, new BlobsStatistics()},
+                {AccessTier.Cool, new BlobsStatistics()},
+                {AccessTier.Archive, new BlobsStatistics()}
             };
         }
 
@@ -44,7 +44,7 @@ namespace BlobTierAnalysisTool.Models
         /// <summary>
         /// Gets the blob statistics for the container.
         /// </summary>
-        public Dictionary<StandardBlobTier, BlobsStatistics> BlobsStatistics
+        public Dictionary<AccessTier, BlobsStatistics> BlobsStatistics
         {
             get
             {
@@ -55,7 +55,7 @@ namespace BlobTierAnalysisTool.Models
         /// <summary>
         /// Gets the blob statistics for the container.
         /// </summary>
-        public Dictionary<StandardBlobTier, BlobsStatistics> MatchingBlobsStatistics
+        public Dictionary<AccessTier, BlobsStatistics> MatchingBlobsStatistics
         {
             get
             {
